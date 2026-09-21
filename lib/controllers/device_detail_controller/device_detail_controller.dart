@@ -218,7 +218,7 @@ class DeviceDetailController extends GetxController {
       final response = await _requestClient.request<Response>(
         url: AppUrl.commandsSend,
         method: RequestType.post,
-        body: {
+        body: <String, dynamic>{
           'deviceId': deviceId,
           'type': type,
           'attributes': <String, dynamic>{},

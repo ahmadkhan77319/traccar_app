@@ -173,6 +173,14 @@ class RequestClient {
     }
   }
 
+  /// Dio's JSON encoder requires `Map<String, dynamic>`, not `_Map<dynamic, dynamic>`.
+  dynamic _normalizeBody(dynamic body) {
+    if (body is Map && body is! Map<String, dynamic>) {
+      return Map<String, dynamic>.from(body);
+    }
+    return body;
+  }
+
   Future<T> request<T>({
     required String url,
     required RequestType method,
@@ -183,6 +191,7 @@ class RequestClient {
   }) async {
     try {
       final requestOptions = options ?? Options();
+      final data = _normalizeBody(body);
       Response response;
 
       switch (method) {
@@ -196,7 +205,7 @@ class RequestClient {
         case RequestType.post:
           response = await dio.post(
             url,
-            data: body,
+            data: data,
             options: requestOptions,
             queryParameters: queryParameters,
           );
@@ -204,7 +213,7 @@ class RequestClient {
         case RequestType.put:
           response = await dio.put(
             url,
-            data: body,
+            data: data,
             options: requestOptions,
             queryParameters: queryParameters,
           );
@@ -212,7 +221,7 @@ class RequestClient {
         case RequestType.delete:
           response = await dio.delete(
             url,
-            data: body,
+            data: data,
             options: requestOptions,
             queryParameters: queryParameters,
           );
@@ -220,7 +229,7 @@ class RequestClient {
         case RequestType.patch:
           response = await dio.patch(
             url,
-            data: body,
+            data: data,
             options: requestOptions,
             queryParameters: queryParameters,
           );

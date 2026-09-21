@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import '../../constants/color.dart';
 import '../../constants/string.dart';
 import '../../controllers/auth_controller/auth_controller.dart';
-import '../../repositories/apis.dart';
 import '../../widgets/buttons/custom_button.dart';
 import '../../widgets/form_validation/form_validation.dart';
 import '../../widgets/text_field/text_input_field.dart';
@@ -38,39 +37,16 @@ class LoginScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const SizedBox(height: 12),
                     Center(
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.28),
-                              blurRadius: 18,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.gps_fixed_rounded,
-                          color: Colors.white,
-                          size: 30,
-                        ),
+                      child: Image.asset(
+                        'assets/brand/cartag_wordmark.png',
+                        height: 72,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      appName,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
                     const Text(
                       'Sign in to track your fleet in real time',
                       textAlign: TextAlign.center,
@@ -87,10 +63,10 @@ class LoginScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: const Color(0xFFE5EAF1)),
+                        border: Border.all(color: AppColors.border),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                            color: AppColors.primaryDark.withValues(alpha: 0.08),
                             blurRadius: 22,
                             offset: const Offset(0, 12),
                           ),
@@ -109,7 +85,7 @@ class LoginScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            'Enter your Traccar account details to continue.',
+                            'Enter your CarTag account details to continue.',
                             style: TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 13,
@@ -159,16 +135,6 @@ class LoginScreen extends StatelessWidget {
                             },
                           ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Server · ${AppUrl.host}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],

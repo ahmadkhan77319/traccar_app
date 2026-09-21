@@ -36,11 +36,12 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 78,
-              height: 78,
+              width: 96,
+              height: 96,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.18),
@@ -49,10 +50,9 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.gps_fixed_rounded,
-                size: 36,
-                color: AppColors.primary,
+              child: Image.asset(
+                'assets/brand/cartag_icon.png',
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(height: 18),
@@ -60,17 +60,18 @@ class _SplashScreenState extends State<SplashScreen> {
               appName,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              'Real-time fleet tracking',
+              appTagline,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: Colors.white.withValues(alpha: 0.85),
                 fontSize: 13,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.2,
               ),
             ),
             const SizedBox(height: 28),

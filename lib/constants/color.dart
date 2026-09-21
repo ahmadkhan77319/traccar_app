@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
 
-/// Freeboard-style palette with red + white brand.
+/// CarTag brand palette (logo blues + black/white).
 class AppColors {
-  static const Color primary = Color(0xFFC62828);
-  static const Color primaryDark = Color(0xFF8E0000);
-  static const Color primaryLight = Color(0xFFE53935);
+  static const Color primary = Color(0xFF008DD2);
+  static const Color primaryDark = Color(0xFF0056B3);
+  static const Color primaryLight = Color(0xFF00AEEF);
 
-  static const Color accent = Color(0xFFEF5350);
+  static const Color accent = Color(0xFF29ABE2);
   static const Color success = Color(0xFF10B981);
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFEF4444);
-  static const Color info = Color(0xFF3B82F6);
+  static const Color info = Color(0xFF008DD2);
 
-  static const Color background = Color(0xFFF8FAFC);
+  static const Color background = Color(0xFFF5F9FC);
   static const Color card = Color(0xFFFFFFFF);
-  static const Color textPrimary = Color(0xFF0F172A);
-  static const Color textSecondary = Color(0xFF64748B);
-  static const Color border = Color(0xFFE2E8F0);
-  static const Color shimmer = Color(0xFFEFF1F5);
+  static const Color textPrimary = Color(0xFF0A0A0A);
+  static const Color textSecondary = Color(0xFF5B6B7A);
+  static const Color border = Color(0xFFDCE6EF);
+  static const Color shimmer = Color(0xFFEEF4F8);
 
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF8E0000), Color(0xFFC62828), Color(0xFFE53935)],
-    stops: [0.0, 0.5, 1.0],
+    colors: [Color(0xFF0056B3), Color(0xFF008DD2), Color(0xFF00AEEF)],
+    stops: [0.0, 0.55, 1.0],
   );
 
   static const LinearGradient successGradient = LinearGradient(
@@ -36,7 +36,7 @@ class AppColors {
 // Backwards-compatible aliases used across the app
 const Color kMainColor = AppColors.primary;
 const Color kPrimaryDark = AppColors.primaryDark;
-const Color kPrimaryContainer = Color(0xFFFFEBEE);
+const Color kPrimaryContainer = Color(0xFFE6F6FC);
 const Color kBackgroundColor = AppColors.background;
 const Color kSurfaceColor = AppColors.card;
 const Color kCardColor = AppColors.card;

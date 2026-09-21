@@ -195,17 +195,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Container(
             width: 38,
             height: 38,
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
             ),
-            child: const Icon(Icons.gps_fixed_rounded, color: Colors.white, size: 20),
+            child: Image.asset(
+              'assets/brand/cartag_icon.png',
+              fit: BoxFit.contain,
+            ),
           ),
           const SizedBox(width: 10),
           const Expanded(
             child: Text.rich(
               TextSpan(
-                text: 'TRACCAR',
+                text: 'Car',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 17,
@@ -213,7 +218,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 children: [
                   TextSpan(
-                    text: ' FLEET',
+                    text: 'Tag',
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w800,

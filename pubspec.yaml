@@ -1,5 +1,5 @@
 name: traccar_app
-description: "Traccar fleet tracking app"
+description: "CarTag vehicle tracking app"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -31,6 +31,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/tbtrack/
+    - assets/brand/
   fonts:
     - family: Titillium
       fonts:

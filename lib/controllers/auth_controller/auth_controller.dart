@@ -38,13 +38,13 @@ class AuthController extends GetxController {
       final response = await _requestClient.request<Response>(
         url: AppUrl.session,
         method: RequestType.post,
-        body: {
+        body: <String, dynamic>{
           'email': email,
           'password': password,
         },
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
-          headers: {
+          headers: <String, dynamic>{
             'Accept': 'application/json',
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -71,7 +71,7 @@ class AuthController extends GetxController {
         final tokenResponse = await _requestClient.request<Response>(
           url: AppUrl.sessionToken,
           method: RequestType.post,
-          body: {},
+          body: <String, dynamic>{},
           options: Options(
             contentType: Headers.formUrlEncodedContentType,
           ),
@@ -143,13 +143,13 @@ class AuthController extends GetxController {
       final response = await _requestClient.request<Response>(
         url: AppUrl.session,
         method: RequestType.post,
-        body: {
+        body: <String, dynamic>{
           'email': email,
           'password': password,
         },
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
-          headers: {
+          headers: <String, dynamic>{
             'Accept': 'application/json',
             'Content-Type': 'application/x-www-form-urlencoded',
           },

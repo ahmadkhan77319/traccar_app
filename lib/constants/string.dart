@@ -1,11 +1,12 @@
-const String appName = 'Traccar Fleet';
+const String appName = 'CarTag';
+const String appTagline = 'Vehicle Tracking';
 const String email = 'Email';
 const String password = 'Password';
 const String enterYourEmail = 'Enter your email or username';
 const String enterYourPassword = 'Enter your password';
 const String login = 'Sign In';
 const String logout = 'Logout';
-const String dashboard = 'Fleet Dashboard';
+const String dashboard = 'CarTag Dashboard';
 const String devices = 'Devices';
 const String noDevices = 'No devices found';
 const String searchDevices = 'Search devices...';

@@ -45,15 +45,15 @@ class LogoutDialog extends StatelessWidget {
               height: 58,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.danger.withValues(alpha: 0.12),
+                color: AppColors.primary.withValues(alpha: 0.12),
                 border: Border.all(
-                  color: AppColors.danger.withValues(alpha: 0.28),
+                  color: AppColors.primary.withValues(alpha: 0.28),
                   width: 1.2,
                 ),
               ),
               child: const Icon(
                 Icons.logout_rounded,
-                color: AppColors.danger,
+                color: AppColors.primary,
                 size: 26,
               ),
             ),
@@ -113,7 +113,7 @@ class LogoutDialog extends StatelessWidget {
                         onConfirm();
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.danger,
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shadowColor: Colors.transparent,
