@@ -1,0 +1,46 @@
+name: traccar_app
+description: "Traccar fleet tracking app"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  get: ^4.7.2
+  dio: ^5.8.0+1
+  shared_preferences: ^2.5.2
+  flutter_easyloading: ^3.0.5
+  gap: ^3.0.1
+  form_field_validator: ^1.1.0
+  intl: ^0.20.2
+  pull_to_refresh: ^2.0.0
+  google_maps_flutter: ^2.12.1
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/tbtrack/
+  fonts:
+    - family: Titillium
+      fonts:
+        - asset: assets/fonts/Titillium-Thin.otf
+          weight: 100
+        - asset: assets/fonts/Titillium-LightUpright.otf
+          weight: 300
+        - asset: assets/fonts/Titillium-Regular.otf
+          weight: 400
+        - asset: assets/fonts/Titillium-Semibold.otf
+          weight: 600
+        - asset: assets/fonts/Titillium-Semibold.otf
+          weight: 700
