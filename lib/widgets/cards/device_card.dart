@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../constants/color.dart';
+import '../../controllers/engine_state_controller/engine_state_controller.dart';
 import '../../model/device_view_model/device_view_model.dart';
+import '../../model/engine_state/engine_state.dart';
 import '../../utills/common.dart';
 import 'status_chip.dart';
 
@@ -199,25 +202,51 @@ class _EngineStatusMetric extends StatelessWidget {
 
   final DeviceViewModel device;
 
-  Color get _valueColor {
-    final label = device.engineStatusLabel;
-    if (label == 'Engine ON') return AppColors.success;
-    if (label == 'Engine OFF') return AppColors.danger;
-    return kUnknownColor;
-  }
-
-  IconData get _icon {
-    final label = device.engineStatusLabel;
-    if (label == 'Engine ON') return Icons.local_fire_department_rounded;
-    if (label == 'Engine OFF') return Icons.power_settings_new_rounded;
-    return Icons.help_outline_rounded;
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (!Get.isRegistered<EngineStateController>()) {
+      return _build(device.engineStatusLabel);
+    }
+    final engine = Get.find<EngineStateController>();
+    return Obx(() {
+      engine.revision.value; // list rebuild when any device updates
+      final state = engine.engineStateFor(device.id).value;
+      final confirmed = engine.lastConfirmedOf(device.id);
+      var label = engine.labelFor(device.id);
+      if (state == EngineState.commandFailed ||
+          state == EngineState.unconfirmed) {
+        final confirmedLabel = confirmed == EngineState.on
+            ? 'Engine ON'
+            : (confirmed == EngineState.off ? 'Engine OFF' : null);
+        if (confirmedLabel != null) {
+          label = '$label · $confirmedLabel';
+        }
+      } else if (state == EngineState.unknown) {
+        label = device.engineStatusLabel;
+      }
+      return _build(label);
+    });
+  }
+
+  Widget _build(String label) {
+    final color = label.contains('ON') && !label.contains('Unknown')
+        ? AppColors.success
+        : (label.contains('OFF')
+            ? AppColors.danger
+            : (label.contains('pending')
+                ? AppColors.warning
+                : kUnknownColor));
+    final icon = label.contains('ON') && !label.contains('Unknown')
+        ? Icons.local_fire_department_rounded
+        : (label.contains('OFF')
+            ? Icons.power_settings_new_rounded
+            : (label.contains('pending')
+                ? Icons.hourglass_top_rounded
+                : Icons.help_outline_rounded));
+
     return Row(
       children: [
-        Icon(_icon, size: 14, color: _valueColor),
+        Icon(icon, size: 14, color: color),
         const SizedBox(width: 5),
         Expanded(
           child: Column(
@@ -232,9 +261,9 @@ class _EngineStatusMetric extends StatelessWidget {
                 ),
               ),
               Text(
-                device.engineStatusLabel,
+                label,
                 style: TextStyle(
-                  color: _valueColor,
+                  color: color,
                   fontWeight: FontWeight.w700,
                   fontSize: 12.5,
                 ),

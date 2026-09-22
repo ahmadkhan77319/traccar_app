@@ -3,12 +3,14 @@ import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
 import 'constants/string.dart';
 import 'constants/theme.dart';
+import 'controllers/engine_state_controller/engine_state_controller.dart';
 import 'repositories/shared_pref_repo.dart';
 import 'splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SharedPrefsRepository.initialize();
+  Get.put(EngineStateController(), permanent: true);
   runApp(const MyApp());
   configLoading();
 }

@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart' hide Response;
 import '../../controllers/dashboard_controller/dashboard_controller.dart';
+import '../../controllers/engine_state_controller/engine_state_controller.dart';
 import '../../model/device_model/device_model.dart';
 import '../../model/device_view_model/device_view_model.dart';
+import '../../model/engine_state/engine_state.dart';
 import '../../model/position_model/position_model.dart';
 import '../../repositories/apis.dart';
 import '../../repositories/network_client_repo.dart';
@@ -28,6 +30,7 @@ class DeviceDetailController extends GetxController {
     sharedPrefsRepository: sharedPrefsRepository,
   );
   final TraccarSocketService _socketService = TraccarSocketService();
+  EngineStateController get _engineStates => Get.find<EngineStateController>();
 
   final deviceView = Rxn<DeviceViewModel>();
   final isLoading = false.obs;
@@ -57,9 +60,34 @@ class DeviceDetailController extends GetxController {
   }
 
   /// True when engine is treated as stopped (show Resume button).
-  bool get isEngineStopped =>
-      deviceView.value?.isEngineStopped ??
-      lastEngineCommand.value == 'engineStop';
+  bool get isEngineStopped {
+    final engine = _engineStates;
+    final state = engine.stateOf(deviceId);
+    switch (state) {
+      case EngineState.off:
+        return true;
+      case EngineState.on:
+        return false;
+      case EngineState.pending:
+        return engine.tracker.pendingOf(deviceId)?.commandType == 'engineStop';
+      case EngineState.commandFailed:
+      case EngineState.unconfirmed:
+        return engine.lastConfirmedOf(deviceId) == EngineState.off;
+      case EngineState.unknown:
+        return deviceView.value?.isEngineStopped ??
+            lastEngineCommand.value == 'engineStop';
+    }
+  }
+
+  void _ingestPosition(PositionModel position) {
+    _engineStates.onPositionUpdate(
+      deviceId: deviceId,
+      attributes: position.attributes,
+      deviceTime: position.deviceTime,
+      fixTime: position.fixTime,
+      serverTime: position.serverTime,
+    );
+  }
 
   Future<void> loadDevice({bool showLoader = true}) async {
     try {
@@ -94,6 +122,10 @@ class DeviceDetailController extends GetxController {
       final device = DeviceModel.fromJson(devices.first);
       final position =
           positions.isNotEmpty ? PositionModel.fromJson(positions.first) : null;
+
+      if (position != null) {
+        _ingestPosition(position);
+      }
 
       deviceView.value = DeviceViewModel(
         device: device,
@@ -139,6 +171,10 @@ class DeviceDetailController extends GetxController {
     for (final raw in payload.devices) {
       if (raw['id'] == deviceId) {
         updated = updated.copyWith(device: DeviceModel.fromJson(raw));
+        _engineStates.onDeviceStatus(
+          deviceId: deviceId,
+          status: raw['status']?.toString(),
+        );
       }
     }
 
@@ -151,9 +187,12 @@ class DeviceDetailController extends GetxController {
           print('ignition: ${attrs['ignition']}');
           print('blocked: ${attrs['blocked']}');
           print('motion: ${attrs['motion']}');
+          print('result: ${attrs['result']}');
         }
         print('=======================================================');
-        updated = updated.copyWith(position: PositionModel.fromJson(raw));
+        final position = PositionModel.fromJson(raw);
+        _ingestPosition(position);
+        updated = updated.copyWith(position: position);
       }
     }
 
@@ -214,6 +253,9 @@ class DeviceDetailController extends GetxController {
     try {
       isCommandLoading.value = true;
       EasyLoading.show(status: 'Sending command...');
+
+      // Optimistic pending *before* HTTP resolves.
+      _engineStates.markCommandPending(deviceId, type);
 
       final response = await _requestClient.request<Response>(
         url: AppUrl.commandsSend,

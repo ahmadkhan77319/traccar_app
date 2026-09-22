@@ -3,7 +3,9 @@ import 'package:get/get.dart';
 import '../../constants/color.dart';
 import '../../constants/string.dart';
 import '../../controllers/device_detail_controller/device_detail_controller.dart';
+import '../../controllers/engine_state_controller/engine_state_controller.dart';
 import '../../model/device_view_model/device_view_model.dart';
+import '../../model/engine_state/engine_state.dart';
 import '../../utills/common.dart';
 import '../../widgets/cards/status_chip.dart';
 import '../../widgets/map/live_map_widget.dart';
@@ -66,23 +68,49 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
 
         final lastCmd = controller.lastEngineCommand.value;
         final engineStopped = controller.isEngineStopped;
-        final engineLabel = device.engineStatusLabel;
+        final engineCtrl = Get.find<EngineStateController>();
+        final engineRx = engineCtrl.engineStateFor(device.id);
+        final engineState = engineRx.value;
+        final confirmed = engineCtrl.lastConfirmedOf(device.id);
+        var engineLabel = engineCtrl.labelFor(device.id);
+        if (engineState == EngineState.unknown) {
+          engineLabel = device.engineStatusLabel;
+        } else if (engineState == EngineState.commandFailed ||
+            engineState == EngineState.unconfirmed) {
+          final confirmedLabel = confirmed == EngineState.on
+              ? 'Engine ON'
+              : (confirmed == EngineState.off ? 'Engine OFF' : null);
+          if (confirmedLabel != null) {
+            engineLabel = '$engineLabel · $confirmedLabel';
+          }
+        }
         final engineSubtitle = device.position == null
             ? 'No position available yet'
-            : (lastCmd != null
-                ? (lastCmd == 'engineResume'
-                    ? 'Updated after Resume command'
-                    : 'Updated after Stop command')
-                : (device.hasIgnitionReport
-                    ? (device.ignition == true
-                        ? 'Ignition is ON'
-                        : 'Ignition is OFF')
-                    : 'Ignition not reported by device'));
-        final engineColor = engineLabel == 'Engine ON'
+            : (engineState == EngineState.pending
+                ? 'Waiting for device confirmation…'
+                : (engineState == EngineState.unconfirmed
+                    ? 'No confirmation received in time'
+                    : (engineState == EngineState.commandFailed
+                        ? 'Device rejected or returned an error'
+                        : (lastCmd != null
+                            ? (lastCmd == 'engineResume'
+                                ? 'Updated after Resume command'
+                                : 'Updated after Stop command')
+                            : (device.hasIgnitionReport
+                                ? (device.ignition == true
+                                    ? 'Ignition is ON'
+                                    : 'Ignition is OFF')
+                                : 'Waiting for relay / result attributes')))));
+        final engineColor = engineState == EngineState.on ||
+                engineLabel.contains('Engine ON')
             ? AppColors.success
-            : (engineLabel == 'Engine OFF'
+            : (engineState == EngineState.off ||
+                    engineLabel.contains('Engine OFF')
                 ? AppColors.danger
-                : kUnknownColor);
+                : (engineState == EngineState.pending
+                    ? AppColors.warning
+                    : kUnknownColor));
+        final isPending = engineState == EngineState.pending;
 
         return Stack(
           children: [
@@ -304,7 +332,8 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                             label: resumeEngine,
                             icon: Icons.play_arrow_rounded,
                             color: AppColors.success,
-                            loading: controller.isCommandLoading.value,
+                            loading: controller.isCommandLoading.value ||
+                                isPending,
                             onTap: () => controller.resumeEngine(context),
                           ),
                         )
@@ -315,7 +344,8 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                             label: stopEngine,
                             icon: Icons.block_rounded,
                             color: AppColors.danger,
-                            loading: controller.isCommandLoading.value,
+                            loading: controller.isCommandLoading.value ||
+                                isPending,
                             onTap: () => controller.stopEngine(context),
                           ),
                         ),

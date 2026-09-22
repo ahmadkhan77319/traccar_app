@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart' hide Response;
+import '../../controllers/engine_state_controller/engine_state_controller.dart';
 import '../../model/device_model/device_model.dart';
 import '../../model/device_view_model/device_view_model.dart';
 import '../../model/position_model/position_model.dart';
@@ -19,6 +20,7 @@ class DashboardController extends GetxController {
     sharedPrefsRepository: sharedPrefsRepository,
   );
   final TraccarSocketService _socketService = TraccarSocketService();
+  EngineStateController get _engineStates => Get.find<EngineStateController>();
 
   final devices = <DeviceViewModel>[].obs;
   final isLoading = false.obs;
@@ -132,6 +134,17 @@ class DashboardController extends GetxController {
           )
           .toList();
 
+      for (final entry in positionsByDevice.entries) {
+        final p = entry.value;
+        _engineStates.onPositionUpdate(
+          deviceId: entry.key,
+          attributes: p.attributes,
+          deviceTime: p.deviceTime,
+          fixTime: p.fixTime,
+          serverTime: p.serverTime,
+        );
+      }
+
       Logger.success('Loaded ${devices.length} devices');
     } on DioException catch (e) {
       Logger.error(e.toString());
@@ -167,6 +180,10 @@ class DashboardController extends GetxController {
       final updated = DeviceModel.fromJson(raw);
       final id = updated.id;
       if (id == null) continue;
+      _engineStates.onDeviceStatus(
+        deviceId: id,
+        status: updated.status,
+      );
       final existing = current[id];
       if (existing != null) {
         current[id] = existing.copyWith(device: updated);
@@ -182,6 +199,13 @@ class DashboardController extends GetxController {
       final updated = PositionModel.fromJson(raw);
       final id = updated.deviceId;
       if (id == null) continue;
+      _engineStates.onPositionUpdate(
+        deviceId: id,
+        attributes: updated.attributes,
+        deviceTime: updated.deviceTime,
+        fixTime: updated.fixTime,
+        serverTime: updated.serverTime,
+      );
       final existing = current[id];
       if (existing != null) {
         current[id] = existing.copyWith(position: updated);

@@ -9,6 +9,8 @@ const String _sessionCookieKey = 'SESSION_COOKIE';
 const String _sessionTokenKey = 'SESSION_TOKEN';
 const String _userModelKey = 'USER_MODEL';
 const String _engineCommandPrefix = 'ENGINE_COMMAND_';
+const String _engineStatePrefix = 'ENGINE_STATE_';
+const String _engineStateIdsKey = 'ENGINE_STATE_IDS';
 
 class SharedPrefsRepository {
   static final SharedPrefsRepository _instance =
@@ -89,5 +91,34 @@ class SharedPrefsRepository {
 
   Future<void> setEngineCommand(int deviceId, String type) async {
     await _prefs.setString('$_engineCommandPrefix$deviceId', type);
+  }
+
+  /// Confirmed engine immobilizer state: `on` or `off` only.
+  String? getConfirmedEngineState(int deviceId) =>
+      _prefs.getString('$_engineStatePrefix$deviceId');
+
+  Future<void> setConfirmedEngineState(int deviceId, String state) async {
+    if (state != 'on' && state != 'off') return;
+    await _prefs.setString('$_engineStatePrefix$deviceId', state);
+    final ids = _prefs.getStringList(_engineStateIdsKey) ?? <String>[];
+    final idStr = deviceId.toString();
+    if (!ids.contains(idStr)) {
+      ids.add(idStr);
+      await _prefs.setStringList(_engineStateIdsKey, ids);
+    }
+  }
+
+  Map<int, String> allConfirmedEngineStates() {
+    final ids = _prefs.getStringList(_engineStateIdsKey) ?? const <String>[];
+    final out = <int, String>{};
+    for (final idStr in ids) {
+      final id = int.tryParse(idStr);
+      if (id == null) continue;
+      final value = getConfirmedEngineState(id);
+      if (value == 'on' || value == 'off') {
+        out[id] = value!;
+      }
+    }
+    return out;
   }
 }
