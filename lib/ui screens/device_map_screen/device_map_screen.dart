@@ -381,6 +381,12 @@ class _InfoTile extends StatelessWidget {
                 ],
               ),
             ),
+            if (onTap != null)
+              Icon(
+                Icons.location_on_rounded,
+                size: 18,
+                color: AppColors.primary,
+              ),
           ],
         ),
       ),
