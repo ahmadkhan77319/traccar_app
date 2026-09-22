@@ -24,124 +24,191 @@ class LoginScreen extends StatelessWidget {
     );
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 12),
-                    Center(
-                      child: Image.asset(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 48),
+                      Image.asset(
                         'assets/brand/cartag_wordmark.png',
-                        height: 72,
+                        height: 48,
                         fit: BoxFit.contain,
                         filterQuality: FilterQuality.high,
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Sign in to track your fleet in real time',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13.5,
-                        height: 1.4,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(height: 14),
+                      Text(
+                        'Fleet tracking made simple',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textSecondary.withValues(alpha: 0.9),
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.15,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 26),
-                    Container(
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryDark.withValues(alpha: 0.08),
-                            blurRadius: 22,
-                            offset: const Offset(0, 12),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'Welcome Back',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Enter your CarTag account details to continue.',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 13,
-                              height: 1.35,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          TextInputFieldWidget(
-                            title: email,
-                            controller: controller.emailController,
-                            hintText: enterYourEmail,
-                            textInputType: TextInputType.emailAddress,
-                            isLableRequired: true,
-                            prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
-                            validators: emailOrUsernameValidator().call,
-                          ),
-                          const SizedBox(height: 12),
-                          Obx(
-                            () => TextInputFieldWidget(
-                              title: password,
-                              controller: controller.passwordController,
-                              hintText: enterYourPassword,
-                              obscure: !controller.isPasswordVisible.value,
-                              isLableRequired: true,
-                              prefixIcon:
-                                  const Icon(Icons.lock_outline_rounded, size: 18),
-                              validators: passwordValidator().call,
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  controller.isPasswordVisible.value
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 18,
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight - 150,
+                        ),
+                        child: Align(
+                          alignment: const Alignment(0, -0.35),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 400),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    22,
+                                    26,
+                                    22,
+                                    24,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: AppColors.border),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF0A2540)
+                                            .withValues(alpha: 0.04),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      const Text(
+                                        'Sign in',
+                                        style: TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.2,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Access your vehicles, live locations, and engine controls in one place.',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary
+                                              .withValues(alpha: 0.95),
+                                          fontSize: 13.5,
+                                          height: 1.45,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      TextInputFieldWidget(
+                                        title: email,
+                                        controller: controller.emailController,
+                                        hintText: enterYourEmail,
+                                        textInputType:
+                                            TextInputType.emailAddress,
+                                        isLableRequired: true,
+                                        prefixIcon: Icon(
+                                          Icons.mail_outline_rounded,
+                                          size: 18,
+                                          color: AppColors.textSecondary
+                                              .withValues(alpha: 0.8),
+                                        ),
+                                        validators:
+                                            emailOrUsernameValidator().call,
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Obx(
+                                        () => TextInputFieldWidget(
+                                          title: password,
+                                          controller:
+                                              controller.passwordController,
+                                          hintText: enterYourPassword,
+                                          obscure: !controller
+                                              .isPasswordVisible.value,
+                                          isLableRequired: true,
+                                          prefixIcon: Icon(
+                                            Icons.lock_outline_rounded,
+                                            size: 18,
+                                            color: AppColors.textSecondary
+                                                .withValues(alpha: 0.8),
+                                          ),
+                                          validators: passwordValidator().call,
+                                          suffixIcon: IconButton(
+                                            icon: Icon(
+                                              controller
+                                                      .isPasswordVisible.value
+                                                  ? Icons
+                                                      .visibility_off_outlined
+                                                  : Icons.visibility_outlined,
+                                              size: 18,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                            onPressed: controller
+                                                .togglePasswordVisibility,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 26),
+                                      CustomButton(
+                                        text: login,
+                                        onTap: () {
+                                          if (formKey.currentState!
+                                              .validate()) {
+                                            controller.login(context);
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'Use the email and password provided with your CarTag account.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary
+                                              .withValues(alpha: 0.75),
+                                          fontSize: 12,
+                                          height: 1.4,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                onPressed: controller.togglePasswordVisibility,
-                              ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  'Your session is protected. Always sign out on shared devices.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary
+                                        .withValues(alpha: 0.65),
+                                    fontSize: 12,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.15,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 22),
-                          CustomButton(
-                            text: login,
-                            icon: Icons.login_rounded,
-                            onTap: () {
-                              if (formKey.currentState!.validate()) {
-                                controller.login(context);
-                              }
-                            },
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
