@@ -223,10 +223,15 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                       ),
                       if (device.hasLocation)
                         _InfoTile(
-                          icon: Icons.my_location_rounded,
+                          icon: Icons.directions_rounded,
                           label: 'Coordinates',
                           value:
                               '${device.latitude!.toStringAsFixed(5)}, ${device.longitude!.toStringAsFixed(5)}',
+                          onTap: () => Common.openInGoogleMaps(
+                            device.latitude!,
+                            device.longitude!,
+                            address: device.address,
+                          ),
                         ),
                       const SizedBox(height: 8),
                       Container(
@@ -331,46 +336,53 @@ class _InfoTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final valueStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: onTap != null ? AppColors.primary : AppColors.textPrimary,
+      height: 1.3,
+      decoration: onTap != null ? TextDecoration.underline : null,
+      decorationColor: AppColors.primary.withValues(alpha: 0.5),
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w600,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                    height: 1.3,
-                  ),
-                ),
-              ],
+                  Text(value, style: valueStyle),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

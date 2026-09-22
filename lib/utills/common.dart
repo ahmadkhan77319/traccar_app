@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../utills/custom_snackbar.dart';
 import '../utills/logging.dart';
 
 class Common {
@@ -62,5 +64,47 @@ class Common {
     final m = local.minute.toString().padLeft(2, '0');
     final s = local.second.toString().padLeft(2, '0');
     return '${local.day}/${local.month}/${local.year} $h:$m:$s';
+  }
+
+  /// Opens coordinates in Google Maps the same way as Vibe en-route "View on Map".
+  static Future<void> openInGoogleMaps(
+    double lat,
+    double lng, {
+    String? address,
+  }) async {
+    final cleaned = address?.trim();
+    final query = (cleaned != null &&
+            cleaned.isNotEmpty &&
+            cleaned != '—' &&
+            cleaned != '-' &&
+            cleaned != 'Address unavailable')
+        ? cleaned
+        : '$lat,$lng';
+
+    final uri = Uri.https('www.google.com', '/maps/search/', {
+      'api': '1',
+      'query': query,
+    });
+
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+      // Fallback if canLaunchUrl is false on some Android builds
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launched) return;
+    } catch (e) {
+      Logger.error('Failed to open Google Maps: $e');
+    }
+
+    snackBarCustom(
+      title: 'Maps',
+      message: 'Could not open Google Maps on this device.',
+      type: SnackBarType.error,
+    );
   }
 }
