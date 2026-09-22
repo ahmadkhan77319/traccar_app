@@ -62,23 +62,25 @@ class DeviceViewModel {
     if (status == 'offline') return DeviceState.offline;
     if (status == 'unknown') return DeviceState.unknown;
 
-    // Online (or missing status treated as online if we have a recent position)
+    final isMoving = position?.motion == true || speedKph > 3;
+    final ignitionOn = ignition == true;
+
+    // Online (or missing status with a recent position)
     if (status == 'online' || status.isEmpty) {
-      if (position?.motion == true || speedKph > 3) {
-        return DeviceState.moving;
-      }
-      // Online but parked / not moving
-      if (status == 'online') return DeviceState.idle;
-      // Empty status with no useful signal
-      if (position == null && device.lastUpdate == null) {
+      if (status.isEmpty && position == null && device.lastUpdate == null) {
         return DeviceState.offline;
       }
-      return DeviceState.idle;
+      // Moving takes priority
+      if (isMoving) return DeviceState.moving;
+      // Client rule: Idle = ignition ON + not moving
+      if (ignitionOn) return DeviceState.idle;
+      // Connected, parked, engine off (or ignition not reported)
+      if (status == 'online' || position != null) return DeviceState.online;
+      return DeviceState.offline;
     }
 
-    if (position?.motion == true || speedKph > 3) {
-      return DeviceState.moving;
-    }
+    if (isMoving) return DeviceState.moving;
+    if (ignitionOn) return DeviceState.idle;
     return DeviceState.offline;
   }
 
