@@ -42,6 +42,13 @@ class DeviceViewModel {
     return ign ? 'Engine ON' : 'Engine OFF';
   }
 
+  /// Same source of truth as [engineStatusLabel] for Idle / engine UI.
+  bool get isEngineConsideredOn {
+    if (lastEngineCommand == 'engineStop') return false;
+    if (lastEngineCommand == 'engineResume') return true;
+    return ignition == true;
+  }
+
   /// True when UI should treat engine as stopped (show Resume).
   bool get isEngineStopped {
     if (lastEngineCommand == 'engineStop') return true;
@@ -63,7 +70,6 @@ class DeviceViewModel {
     if (status == 'unknown') return DeviceState.unknown;
 
     final isMoving = position?.motion == true || speedKph > 3;
-    final ignitionOn = ignition == true;
 
     // Online (or missing status with a recent position)
     if (status == 'online' || status.isEmpty) {
@@ -72,15 +78,15 @@ class DeviceViewModel {
       }
       // Moving takes priority
       if (isMoving) return DeviceState.moving;
-      // Client rule: Idle = ignition ON + not moving
-      if (ignitionOn) return DeviceState.idle;
+      // Client rule: Idle = engine/ignition ON + not moving
+      if (isEngineConsideredOn) return DeviceState.idle;
       // Connected, parked, engine off (or ignition not reported)
       if (status == 'online' || position != null) return DeviceState.online;
       return DeviceState.offline;
     }
 
     if (isMoving) return DeviceState.moving;
-    if (ignitionOn) return DeviceState.idle;
+    if (isEngineConsideredOn) return DeviceState.idle;
     return DeviceState.offline;
   }
 
