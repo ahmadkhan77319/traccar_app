@@ -123,6 +123,15 @@ class DashboardController extends GetxController {
           if (p.deviceId != null) p.deviceId!: p,
       };
 
+      // Apply engine/blocked BEFORE list paint so cards see reportsBlocked.
+      _engineStates.applyPositionsFromRest(
+        positionsByDevice.values,
+        devicesById: {
+          for (final d in deviceList)
+            if (d.id != null) d.id!: d,
+        },
+      );
+
       devices.value = deviceList
           .map(
             (device) => DeviceViewModel(
@@ -134,14 +143,6 @@ class DashboardController extends GetxController {
           )
           .toList();
 
-      // GET /api/positions (already fetched above) + 24h history for relay state.
-      _engineStates.applyPositionsFromRest(
-        positionsByDevice.values,
-        devicesById: {
-          for (final d in deviceList)
-            if (d.id != null) d.id!: d,
-        },
-      );
       await _engineStates.backfillUnknownFromHistory([
         for (final d in deviceList)
           if (d.id != null) d.id!,

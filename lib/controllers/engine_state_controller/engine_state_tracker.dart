@@ -128,6 +128,9 @@ class EngineStateTracker {
 
   bool usesIgnitionFallback(int deviceId) => _ignitionMode.contains(deviceId);
 
+  /// True only after Traccar sent a real `blocked` value for this device.
+  bool reportsBlocked(int deviceId) => _hadBlocked.contains(deviceId);
+
   /// Mark command pending *before* HTTP completes. Replaces any prior pending.
   void markCommandPending(int deviceId, String commandType) {
     final now = _mono.elapsedMilliseconds;
@@ -227,7 +230,13 @@ class EngineStateTracker {
       useIgnitionFallback: false,
     );
     if (fromPos == EngineState.on || fromPos == EngineState.off) {
-      if (!_acceptTimestamp(deviceId, timestamp)) return false;
+      // Initial REST must apply even if a WS packet already stamped a time.
+      if (timestamp != null) {
+        final last = _lastAppliedAt[deviceId];
+        if (last == null || !timestamp.isBefore(last)) {
+          _lastAppliedAt[deviceId] = timestamp;
+        }
+      }
       return _setConfirmed(deviceId, fromPos);
     }
 
@@ -238,7 +247,12 @@ class EngineStateTracker {
       useIgnitionFallback: false,
     );
     if (fromDev == EngineState.on || fromDev == EngineState.off) {
-      if (!_acceptTimestamp(deviceId, timestamp)) return false;
+      if (timestamp != null) {
+        final last = _lastAppliedAt[deviceId];
+        if (last == null || !timestamp.isBefore(last)) {
+          _lastAppliedAt[deviceId] = timestamp;
+        }
+      }
       return _setConfirmed(deviceId, fromDev);
     }
 
@@ -268,6 +282,14 @@ class EngineStateTracker {
       );
       if (resolved != EngineState.on && resolved != EngineState.off) {
         continue;
+      }
+      final attrs = p.attributes;
+      if (attrs != null &&
+          attrs.containsKey('blocked') &&
+          attrs['blocked'] != null) {
+        _hadBlocked.add(deviceId);
+        _ignitionMode.remove(deviceId);
+        _localCommandLocked.remove(deviceId);
       }
       if (!_acceptTimestamp(deviceId, p.timestamp)) continue;
       return _setConfirmed(deviceId, resolved);

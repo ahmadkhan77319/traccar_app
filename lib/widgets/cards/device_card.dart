@@ -116,8 +116,24 @@ class DeviceCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              _EngineStatusMetric(device: device),
-              const SizedBox(height: 10),
+              if (Get.isRegistered<EngineStateController>())
+                Obx(() {
+                  final engine = Get.find<EngineStateController>();
+                  engine.revision.value;
+                  final show = engine.showsEngineUi(
+                    device.id,
+                    positionAttributes: device.position?.attributes,
+                  );
+                  if (!show) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    children: [
+                      _EngineStatusMetric(device: device),
+                      const SizedBox(height: 10),
+                    ],
+                  );
+                }),
               Row(
                 children: [
                   Icon(Icons.location_on_outlined, size: 14, color: AppColors.primary),
@@ -220,6 +236,15 @@ class _EngineStatusMetric extends StatelessWidget {
             : (confirmed == EngineState.off ? 'Engine OFF' : null);
         if (confirmedLabel != null) {
           label = '$label · $confirmedLabel';
+        }
+      }
+      // First paint: if tracker not updated yet but position has blocked.
+      if (state == EngineState.unknown || state == EngineState.noRelayData) {
+        final blocked = device.position?.attributes?['blocked'];
+        if (blocked == true) {
+          label = 'Engine OFF';
+        } else if (blocked == false) {
+          label = 'Engine ON';
         }
       }
       return _build(label, state: state);

@@ -266,6 +266,10 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                           ),
                         ),
                       const SizedBox(height: 8),
+                      if (engineCtrl.showsEngineUi(
+                        device.id,
+                        positionAttributes: device.position?.attributes,
+                      )) ...[
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -353,6 +357,7 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                             onTap: () => controller.stopEngine(context),
                           ),
                         ),
+                      ],
                     ],
                   ),
                 );

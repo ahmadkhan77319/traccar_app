@@ -70,6 +70,16 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
   EngineState? lastConfirmedOf(int deviceId) =>
       tracker.lastConfirmedOf(deviceId);
 
+  /// Show engine status / Stop-Resume only when Traccar reports `blocked`.
+  bool reportsBlocked(int deviceId) => tracker.reportsBlocked(deviceId);
+
+  /// Same check, also trusting raw position attributes (first paint on home).
+  bool showsEngineUi(int deviceId, {Map<String, dynamic>? positionAttributes}) {
+    if (tracker.reportsBlocked(deviceId)) return true;
+    final blocked = positionAttributes?['blocked'];
+    return blocked != null;
+  }
+
   String labelFor(int deviceId) {
     switch (stateOf(deviceId)) {
       case EngineState.on:
