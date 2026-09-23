@@ -10,9 +10,25 @@ import 'splash_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SharedPrefsRepository.initialize();
+  _debugPrintSessionForPostman();
   Get.put(EngineStateController(), permanent: true);
   runApp(const MyApp());
   configLoading();
+}
+
+/// Temporary: copy Cookie / token into Postman while debugging.
+void _debugPrintSessionForPostman() {
+  final prefs = SharedPrefsRepository();
+  final cookie = prefs.sessionCookie;
+  final token = prefs.sessionToken;
+  print('========== POSTMAN AUTH (debug) ==========');
+  print('Cookie: ${cookie ?? '(none — log in first)'}');
+  print('Session token: ${token ?? '(none — log in once to create)'}');
+  if (token != null && token.isNotEmpty) {
+    print('Positions with token:');
+    print('GET https://my.cartag.co.za/api/positions?token=$token');
+  }
+  print('==========================================');
 }
 
 void configLoading() {

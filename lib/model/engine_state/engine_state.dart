@@ -15,6 +15,10 @@ enum EngineState {
   /// Device returned a non-OK result for a pending command.
   commandFailed,
 
-  /// No confirmed state yet.
+  /// Still loading / not yet checked against Traccar history.
   unknown,
+
+  /// History scanned: this device never reports blocked/RELAY.
+  /// Distinct from [unknown] (still checking). Do not invent ON/OFF.
+  noRelayData,
 }

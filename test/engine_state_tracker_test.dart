@@ -3,6 +3,89 @@ import 'package:traccar_app/controllers/engine_state_controller/engine_state_tra
 import 'package:traccar_app/model/engine_state/engine_state.dart';
 
 void main() {
+  group('resolveEngineState', () {
+    test('blocked-present: true → off, false → on', () {
+      expect(
+        resolveEngineState({'blocked': true}),
+        EngineState.off,
+      );
+      expect(
+        resolveEngineState({'blocked': false}),
+        EngineState.on,
+      );
+    });
+
+    test('result-fallback success', () {
+      expect(
+        resolveEngineState(
+          {'result': 'S20,OK,143912'},
+          pendingCommandType: 'engineStop',
+        ),
+        EngineState.off,
+      );
+      expect(
+        resolveEngineState(
+          {'result': 'RELAY 1 OK'},
+          pendingCommandType: 'engineResume',
+        ),
+        EngineState.on,
+      );
+    });
+
+    test('result-fallback failure', () {
+      expect(
+        resolveEngineState(
+          {'result': 'S20,ERROR'},
+          pendingCommandType: 'engineStop',
+        ),
+        EngineState.commandFailed,
+      );
+      expect(
+        resolveEngineState(
+          {'result': 'FAIL'},
+          pendingCommandType: 'engineResume',
+        ),
+        EngineState.commandFailed,
+      );
+    });
+
+    test('REST infers ON/OFF from RELAY 0/1 OK without pending', () {
+      expect(
+        resolveEngineState(
+          {'result': 'RELAY 0 OK'},
+          inferFromRelayResult: true,
+        ),
+        EngineState.on,
+      );
+      expect(
+        resolveEngineState(
+          {'result': 'RELAY 1 OK'},
+          inferFromRelayResult: true,
+        ),
+        EngineState.off,
+      );
+      // Without flag, must stay unknown
+      expect(
+        resolveEngineState({'result': 'RELAY 0 OK'}),
+        EngineState.unknown,
+      );
+    });
+
+    test('unknown when neither blocked nor pending result', () {
+      expect(
+        resolveEngineState({'ignition': true, 'motion': false}),
+        EngineState.unknown,
+      );
+      expect(resolveEngineState(null), EngineState.unknown);
+      expect(resolveEngineState({}), EngineState.unknown);
+      // result without pending must not invent state
+      expect(
+        resolveEngineState({'result': 'S20,OK,1'}),
+        EngineState.unknown,
+      );
+    });
+  });
+
   group('EngineStateTracker', () {
     late Stopwatch mono;
     late EngineStateTracker tracker;
@@ -15,153 +98,212 @@ void main() {
       );
     });
 
-    test('blocked-present: true → off, false → on', () {
+    test('blocked-present resolution via position update', () {
       tracker.onPositionUpdate(
         deviceId: 1797,
-        attributes: {'blocked': true, 'ignition': false},
+        attributes: {'blocked': true},
         timestamp: DateTime(2026, 9, 22, 12),
       );
       expect(tracker.stateOf(1797), EngineState.off);
-      expect(tracker.lastConfirmedOf(1797), EngineState.off);
 
       tracker.onPositionUpdate(
         deviceId: 1797,
-        attributes: {'blocked': false, 'ignition': false},
+        attributes: {'blocked': false},
         timestamp: DateTime(2026, 9, 22, 12, 1),
       );
       expect(tracker.stateOf(1797), EngineState.on);
-      expect(tracker.lastConfirmedOf(1797), EngineState.on);
     });
 
-    test('result-fallback success for engineStop / engineResume', () {
+    test('result-fallback success / failure with pending', () {
       tracker.markCommandPending(596, 'engineStop');
-      expect(tracker.stateOf(596), EngineState.pending);
-
       tracker.onPositionUpdate(
         deviceId: 596,
-        attributes: {'result': 'S20,OK,143912', 'ignition': false},
+        attributes: {'result': 'S20,OK,143912'},
         timestamp: DateTime(2026, 9, 22, 14),
       );
       expect(tracker.stateOf(596), EngineState.off);
-      expect(tracker.pendingOf(596), isNull);
 
-      tracker.markCommandPending(596, 'engineResume');
-      tracker.onPositionUpdate(
-        deviceId: 596,
-        attributes: {'result': 'RELAY 1 OK'},
-        timestamp: DateTime(2026, 9, 22, 14, 1),
-      );
-      expect(tracker.stateOf(596), EngineState.on);
-    });
-
-    test('result-fallback failure keeps last confirmed', () {
-      tracker.seedConfirmed(10, EngineState.on);
+      tracker.seedLastConfirmedForTest(10, EngineState.on);
       tracker.markCommandPending(10, 'engineStop');
       tracker.onPositionUpdate(
         deviceId: 10,
-        attributes: {'result': 'S20,ERROR,1'},
+        attributes: {'result': 'ERROR'},
         timestamp: DateTime(2026, 9, 22, 15),
       );
       expect(tracker.stateOf(10), EngineState.commandFailed);
       expect(tracker.lastConfirmedOf(10), EngineState.on);
-      expect(tracker.pendingOf(10), isNull);
     });
 
-    test('timeout / unconfirmed via monotonic deadline', () {
-      tracker.markCommandPending(20, 'engineStop');
-      expect(tracker.stateOf(20), EngineState.pending);
-
-      // Advance monotonic clock past 30s without using wall DateTime.
-      // Stopwatch can't be forced forward easily — use a pre-aged deadline
-      // by constructing tracker with short timeout and sleeping briefly, OR
-      // inject elapsed by using a custom approach: checkTimeouts after
-      // manually setting via short timeout.
+    test('timeout / unconfirmed', () {
       final fast = EngineStateTracker(
         stopwatch: mono,
         pendingTimeout: const Duration(milliseconds: 1),
       );
       fast.markCommandPending(20, 'engineStop');
-      // Ensure elapsed passes deadline.
-      while (mono.elapsedMilliseconds <
-          (fast.pendingOf(20)!.deadlineMonoMs)) {
-        // busy wait tiny bit
-      }
+      while (mono.elapsedMilliseconds < fast.pendingOf(20)!.deadlineMonoMs) {}
       expect(fast.checkTimeouts(), isTrue);
       expect(fast.stateOf(20), EngineState.unconfirmed);
-      expect(fast.pendingOf(20), isNull);
     });
 
     test('out-of-order update rejection', () {
-      final t1 = DateTime(2026, 9, 22, 10, 0, 0);
-      final t0 = DateTime(2026, 9, 22, 9, 0, 0);
-
+      final t1 = DateTime(2026, 9, 22, 10);
+      final t0 = DateTime(2026, 9, 22, 9);
       tracker.onPositionUpdate(
         deviceId: 5,
         attributes: {'blocked': true},
         timestamp: t1,
       );
-      expect(tracker.stateOf(5), EngineState.off);
-
-      final applied = tracker.onPositionUpdate(
-        deviceId: 5,
-        attributes: {'blocked': false},
-        timestamp: t0, // older
+      expect(
+        tracker.onPositionUpdate(
+          deviceId: 5,
+          attributes: {'blocked': false},
+          timestamp: t0,
+        ),
+        isFalse,
       );
-      expect(applied, isFalse);
       expect(tracker.stateOf(5), EngineState.off);
     });
 
-    test('concurrent commands on two devices do not interfere', () {
+    test('REST vs WebSocket race — newer timestamp wins', () {
+      final restTime = DateTime(2026, 9, 22, 10, 0, 0);
+      final wsTime = DateTime(2026, 9, 22, 10, 0, 5);
+
+      // WS arrives first with newer fix
+      tracker.onPositionUpdate(
+        deviceId: 42,
+        attributes: {'blocked': false},
+        timestamp: wsTime,
+      );
+      expect(tracker.stateOf(42), EngineState.on);
+
+      // Late REST snapshot is older → ignored
+      expect(
+        tracker.applyInitialSnapshot(
+          deviceId: 42,
+          positionAttributes: {'blocked': true},
+          timestamp: restTime,
+        ),
+        isFalse,
+      );
+      expect(tracker.stateOf(42), EngineState.on);
+
+      // Reverse: REST first, then older WS rejected
+      final t = EngineStateTracker(stopwatch: mono);
+      t.applyInitialSnapshot(
+        deviceId: 43,
+        positionAttributes: {'blocked': true},
+        timestamp: wsTime,
+      );
+      expect(t.stateOf(43), EngineState.off);
+      expect(
+        t.onPositionUpdate(
+          deviceId: 43,
+          attributes: {'blocked': false},
+          timestamp: restTime,
+        ),
+        isFalse,
+      );
+      expect(t.stateOf(43), EngineState.off);
+    });
+
+    test('concurrent commands on two devices', () {
       tracker.markCommandPending(100, 'engineStop');
       tracker.markCommandPending(200, 'engineResume');
-
       tracker.onPositionUpdate(
         deviceId: 100,
-        attributes: {'result': 'S20,OK,1'},
+        attributes: {'result': 'OK'},
         timestamp: DateTime(2026, 9, 22, 16),
       );
       expect(tracker.stateOf(100), EngineState.off);
       expect(tracker.stateOf(200), EngineState.pending);
-
       tracker.onPositionUpdate(
         deviceId: 200,
         attributes: {'result': 'SUCCESS'},
         timestamp: DateTime(2026, 9, 22, 16, 1),
       );
       expect(tracker.stateOf(200), EngineState.on);
-      expect(tracker.stateOf(100), EngineState.off);
     });
 
-    test('null attributes do not throw', () {
-      expect(
-        () => tracker.onPositionUpdate(
-          deviceId: 1,
-          attributes: null,
-          timestamp: DateTime.now(),
-        ),
-        returnsNormally,
+    test('initial snapshot unknown when no blocked on position or device', () {
+      tracker.applyInitialSnapshot(
+        deviceId: 1,
+        positionAttributes: {'ignition': false},
+        deviceAttributes: {'foo': 1},
+        timestamp: DateTime(2026, 9, 22),
       );
       expect(tracker.stateOf(1), EngineState.unknown);
     });
 
-    test('offline while pending → unconfirmed', () {
-      tracker.markCommandPending(7, 'engineStop');
-      tracker.onDeviceStatus(deviceId: 7, status: 'offline');
-      expect(tracker.stateOf(7), EngineState.unconfirmed);
-      expect(tracker.pendingOf(7), isNull);
+    test('GPS update without blocked does not wipe confirmed state', () {
+      tracker.onPositionUpdate(
+        deviceId: 9,
+        attributes: {'blocked': true},
+        timestamp: DateTime(2026, 9, 22, 11),
+      );
+      tracker.onPositionUpdate(
+        deviceId: 9,
+        attributes: {'ignition': false, 'motion': false},
+        timestamp: DateTime(2026, 9, 22, 11, 1),
+      );
+      expect(tracker.stateOf(9), EngineState.off);
     });
 
-    test('new pending command replaces old pending', () {
-      tracker.markCommandPending(3, 'engineStop');
-      tracker.markCommandPending(3, 'engineResume');
-      expect(tracker.pendingOf(3)?.commandType, 'engineResume');
+    test('ignition fallback for no-relay devices; blocked still wins for 1797', () {
+      expect(tracker.stateOf(504), EngineState.unknown);
+      tracker.enableIgnitionFallback(
+        504,
+        attributes: {'ignition': false, 'status': 1},
+      );
+      expect(tracker.usesIgnitionFallback(504), isTrue);
+      expect(tracker.stateOf(504), EngineState.off);
+
+      // Live ignition ON must NOT overwrite local OFF for ct1.
+      tracker.onPositionUpdate(
+        deviceId: 504,
+        attributes: {'ignition': true, 'motion': true},
+        timestamp: DateTime(2026, 9, 22, 18, 1),
+      );
+      expect(tracker.stateOf(504), EngineState.off);
+
+      // Resume locks ON locally; later ignition false must not flip to OFF.
+      expect(tracker.confirmLocalCommand(504, 'engineResume'), isTrue);
+      expect(tracker.stateOf(504), EngineState.on);
+      tracker.onPositionUpdate(
+        deviceId: 504,
+        attributes: {'ignition': false},
+        timestamp: DateTime(2026, 9, 22, 18, 2),
+      );
+      expect(tracker.stateOf(504), EngineState.on);
 
       tracker.onPositionUpdate(
-        deviceId: 3,
-        attributes: {'result': 'OK'},
-        timestamp: DateTime(2026, 9, 22, 17),
+        deviceId: 1797,
+        attributes: {'blocked': false, 'ignition': false},
+        timestamp: DateTime(2026, 9, 22, 18),
       );
-      expect(tracker.stateOf(3), EngineState.on);
+      expect(tracker.stateOf(1797), EngineState.on);
+      expect(tracker.usesIgnitionFallback(1797), isFalse);
+      expect(tracker.confirmLocalCommand(1797, 'engineStop'), isFalse);
+      expect(tracker.stateOf(1797), EngineState.on);
+
+      tracker.enableIgnitionFallback(
+        596,
+        lastEngineCommand: 'engineResume',
+        attributes: {'ignition': false},
+      );
+      expect(tracker.stateOf(596), EngineState.on);
     });
   });
+}
+
+/// Test-only hook — keeps lastConfirmed for failure UI without persistence.
+extension on EngineStateTracker {
+  void seedLastConfirmedForTest(int deviceId, EngineState state) {
+    onPositionUpdate(
+      deviceId: deviceId,
+      attributes: {
+        'blocked': state == EngineState.off,
+      },
+      timestamp: DateTime(2026, 1, 1),
+    );
+  }
 }

@@ -221,28 +221,31 @@ class _EngineStatusMetric extends StatelessWidget {
         if (confirmedLabel != null) {
           label = '$label · $confirmedLabel';
         }
-      } else if (state == EngineState.unknown) {
-        label = device.engineStatusLabel;
       }
-      return _build(label);
+      return _build(label, state: state);
     });
   }
 
-  Widget _build(String label) {
-    final color = label.contains('ON') && !label.contains('Unknown')
-        ? AppColors.success
-        : (label.contains('OFF')
-            ? AppColors.danger
-            : (label.contains('pending')
-                ? AppColors.warning
-                : kUnknownColor));
-    final icon = label.contains('ON') && !label.contains('Unknown')
-        ? Icons.local_fire_department_rounded
-        : (label.contains('OFF')
-            ? Icons.power_settings_new_rounded
-            : (label.contains('pending')
-                ? Icons.hourglass_top_rounded
-                : Icons.help_outline_rounded));
+  Widget _build(String label, {EngineState? state}) {
+    final isNoRelay = state == EngineState.noRelayData;
+    final color = isNoRelay
+        ? kUnknownColor
+        : (label.contains('ON') && !label.contains('Unknown')
+            ? AppColors.success
+            : (label.contains('OFF')
+                ? AppColors.danger
+                : (label.contains('pending')
+                    ? AppColors.warning
+                    : kUnknownColor)));
+    final icon = isNoRelay
+        ? Icons.link_off_rounded
+        : (label.contains('ON') && !label.contains('Unknown')
+            ? Icons.local_fire_department_rounded
+            : (label.contains('OFF')
+                ? Icons.power_settings_new_rounded
+                : (label.contains('pending')
+                    ? Icons.hourglass_top_rounded
+                    : Icons.help_outline_rounded)));
 
     return Row(
       children: [

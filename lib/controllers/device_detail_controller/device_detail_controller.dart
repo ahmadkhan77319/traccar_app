@@ -74,8 +74,8 @@ class DeviceDetailController extends GetxController {
       case EngineState.unconfirmed:
         return engine.lastConfirmedOf(deviceId) == EngineState.off;
       case EngineState.unknown:
-        return deviceView.value?.isEngineStopped ??
-            lastEngineCommand.value == 'engineStop';
+      case EngineState.noRelayData:
+        return false;
     }
   }
 
@@ -87,6 +87,22 @@ class DeviceDetailController extends GetxController {
       fixTime: position.fixTime,
       serverTime: position.serverTime,
     );
+  }
+
+  void _ingestInitialFromRest({
+    required PositionModel? position,
+    required DeviceModel device,
+  }) {
+    _engineStates.applyDeviceRestSnapshot(
+      deviceId: deviceId,
+      positionAttributes: position?.attributes,
+      deviceAttributes: device.attributes,
+      timestamp: position?.deviceTime ??
+          position?.fixTime ??
+          position?.serverTime,
+    );
+    // Ignore future — fire history backfill for real blocked/RELAY data.
+    _engineStates.refreshDeviceFromTraccar(deviceId);
   }
 
   Future<void> loadDevice({bool showLoader = true}) async {
@@ -123,9 +139,7 @@ class DeviceDetailController extends GetxController {
       final position =
           positions.isNotEmpty ? PositionModel.fromJson(positions.first) : null;
 
-      if (position != null) {
-        _ingestPosition(position);
-      }
+      _ingestInitialFromRest(position: position, device: device);
 
       deviceView.value = DeviceViewModel(
         device: device,
@@ -288,6 +302,8 @@ class DeviceDetailController extends GetxController {
 
       lastEngineCommand.value = type;
       await sharedPrefsRepository.setEngineCommand(deviceId, type);
+      // ct1 / no-relay: no blocked confirmation — apply ON/OFF locally.
+      _engineStates.confirmLocalCommandIfIgnitionMode(deviceId, type);
 
       final current = deviceView.value;
       if (current != null) {

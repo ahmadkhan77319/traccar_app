@@ -73,9 +73,7 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
         final engineState = engineRx.value;
         final confirmed = engineCtrl.lastConfirmedOf(device.id);
         var engineLabel = engineCtrl.labelFor(device.id);
-        if (engineState == EngineState.unknown) {
-          engineLabel = device.engineStatusLabel;
-        } else if (engineState == EngineState.commandFailed ||
+        if (engineState == EngineState.commandFailed ||
             engineState == EngineState.unconfirmed) {
           final confirmedLabel = confirmed == EngineState.on
               ? 'Engine ON'
@@ -84,6 +82,8 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
             engineLabel = '$engineLabel · $confirmedLabel';
           }
         }
+        final ignitionMode =
+            engineCtrl.tracker.usesIgnitionFallback(device.id);
         final engineSubtitle = device.position == null
             ? 'No position available yet'
             : (engineState == EngineState.pending
@@ -92,20 +92,24 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                     ? 'No confirmation received in time'
                     : (engineState == EngineState.commandFailed
                         ? 'Device rejected or returned an error'
-                        : (lastCmd != null
-                            ? (lastCmd == 'engineResume'
-                                ? 'Updated after Resume command'
-                                : 'Updated after Stop command')
-                            : (device.hasIgnitionReport
-                                ? (device.ignition == true
-                                    ? 'Ignition is ON'
-                                    : 'Ignition is OFF')
-                                : 'Waiting for relay / result attributes')))));
-        final engineColor = engineState == EngineState.on ||
-                engineLabel.contains('Engine ON')
+                        : (engineState == EngineState.unknown
+                            ? 'Waiting for relay / blocked from Traccar'
+                            : (engineState == EngineState.noRelayData
+                                ? 'This tracker does not report immobilizer state'
+                                : (ignitionMode
+                                    ? 'Local status (device has no relay feedback)'
+                                    : (lastCmd != null
+                                        ? (lastCmd == 'engineResume'
+                                            ? 'Updated after Resume command'
+                                            : 'Updated after Stop command')
+                                        : (device.hasIgnitionReport
+                                            ? (device.ignition == true
+                                                ? 'Ignition is ON (ACC)'
+                                                : 'Ignition is OFF (ACC)')
+                                            : 'Live relay state from Traccar'))))))));
+        final engineColor = engineState == EngineState.on
             ? AppColors.success
-            : (engineState == EngineState.off ||
-                    engineLabel.contains('Engine OFF')
+            : (engineState == EngineState.off
                 ? AppColors.danger
                 : (engineState == EngineState.pending
                     ? AppColors.warning

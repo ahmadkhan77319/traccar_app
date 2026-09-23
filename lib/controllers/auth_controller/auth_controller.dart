@@ -79,6 +79,13 @@ class AuthController extends GetxController {
         final token = tokenResponse.data?.toString();
         if (token != null && token.isNotEmpty) {
           await sharedPrefsRepository.setSessionToken(token);
+          print('========== POSTMAN AUTH (after login) ==========');
+          print('Cookie: ${sharedPrefsRepository.sessionCookie}');
+          print('Session token: $token');
+          print(
+            'GET https://my.cartag.co.za/api/positions?token=$token',
+          );
+          print('================================================');
         }
       } catch (_) {
         // Token generation is optional

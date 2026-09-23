@@ -134,16 +134,18 @@ class DashboardController extends GetxController {
           )
           .toList();
 
-      for (final entry in positionsByDevice.entries) {
-        final p = entry.value;
-        _engineStates.onPositionUpdate(
-          deviceId: entry.key,
-          attributes: p.attributes,
-          deviceTime: p.deviceTime,
-          fixTime: p.fixTime,
-          serverTime: p.serverTime,
-        );
-      }
+      // GET /api/positions (already fetched above) + 24h history for relay state.
+      _engineStates.applyPositionsFromRest(
+        positionsByDevice.values,
+        devicesById: {
+          for (final d in deviceList)
+            if (d.id != null) d.id!: d,
+        },
+      );
+      await _engineStates.backfillUnknownFromHistory([
+        for (final d in deviceList)
+          if (d.id != null) d.id!,
+      ]);
 
       Logger.success('Loaded ${devices.length} devices');
     } on DioException catch (e) {
