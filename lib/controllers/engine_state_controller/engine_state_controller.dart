@@ -73,11 +73,55 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
   /// Show engine status / Stop-Resume only when Traccar reports `blocked`.
   bool reportsBlocked(int deviceId) => tracker.reportsBlocked(deviceId);
 
-  /// Same check, also trusting raw position attributes (first paint on home).
-  bool showsEngineUi(int deviceId, {Map<String, dynamic>? positionAttributes}) {
+  /// Same check, also trusting position attrs, ct3 protocol, or cached blocked.
+  bool showsEngineUi(
+    int deviceId, {
+    Map<String, dynamic>? positionAttributes,
+    String? protocol,
+  }) {
     if (tracker.reportsBlocked(deviceId)) return true;
-    final blocked = positionAttributes?['blocked'];
-    return blocked != null;
+    if (_prefs.deviceReportsBlocked(deviceId)) return true;
+    if (positionAttributes?['blocked'] != null) return true;
+    // ct3 always has immobilizer support — show while waiting for blocked.
+    final proto = (protocol ?? '').toLowerCase();
+    if (proto == 'ct3') return true;
+    return false;
+  }
+
+  void _seedFromPrefs(int deviceId) {
+    // Command first — when blocked is null we show what the user last sent.
+    final cmd = _prefs.getEngineCommand(deviceId);
+    if (cmd == 'engineStop' || cmd == 'engineResume') {
+      tracker.seedCommandFromCache(deviceId, cmd);
+    }
+    if (!_prefs.deviceReportsBlocked(deviceId)) return;
+    final raw = _prefs.getEngineBlockedState(deviceId);
+    EngineState? state;
+    if (raw == 'on') state = EngineState.on;
+    if (raw == 'off') state = EngineState.off;
+    tracker.seedBlockedFromCache(
+      deviceId,
+      reportsBlocked: true,
+      state: state,
+    );
+  }
+
+  /// Persist ON/OFF for cards after restart / when blocked is omitted.
+  void _persistDisplayState(int deviceId) {
+    final state = tracker.stateOf(deviceId);
+    if (state != EngineState.on && state != EngineState.off) return;
+    _prefs.setEngineBlockedState(
+      deviceId,
+      state == EngineState.on ? 'on' : 'off',
+    );
+    if (tracker.reportsBlocked(deviceId)) {
+      _prefs.setDeviceReportsBlocked(deviceId, true);
+    }
+    // Keep command prefs aligned with last known display status.
+    _prefs.setEngineCommand(
+      deviceId,
+      state == EngineState.off ? 'engineStop' : 'engineResume',
+    );
   }
 
   String labelFor(int deviceId) {
@@ -93,6 +137,8 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
       case EngineState.commandFailed:
         return 'Command failed';
       case EngineState.unknown:
+        // ct3: friendly first paint until snapshot resolves to ON.
+        if (tracker.isCt3(deviceId)) return 'Engine ON';
         return 'Checking engine status…';
       case EngineState.noRelayData:
         return 'No relay data available';
@@ -104,9 +150,11 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
     _syncRx(deviceId);
   }
 
-  /// After Traccar accepts Stop/Resume — for no-blocked devices, confirm locally.
+  /// After Traccar accepts Stop/Resume — apply ON/OFF when blocked is absent
+  /// (ct1 always; ct3 until the next real `blocked` packet).
   void confirmLocalCommandIfIgnitionMode(int deviceId, String commandType) {
     if (tracker.confirmLocalCommand(deviceId, commandType)) {
+      _persistDisplayState(deviceId);
       _syncRx(deviceId);
     }
   }
@@ -117,14 +165,25 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
     DateTime? deviceTime,
     DateTime? fixTime,
     DateTime? serverTime,
+    String? protocol,
   }) {
     final ts = deviceTime ?? fixTime ?? serverTime;
     final changed = tracker.onPositionUpdate(
       deviceId: deviceId,
       attributes: attributes,
       timestamp: ts,
+      protocol: protocol,
+      lastEngineCommand: _prefs.getEngineCommand(deviceId),
     );
-    if (changed) _syncRx(deviceId);
+    // Always refresh UI when blocked is present so card/sheet update immediately.
+    final hasBlocked = attributes != null &&
+        attributes.containsKey('blocked') &&
+        attributes['blocked'] != null;
+    if (changed || hasBlocked) {
+      _persistDisplayState(deviceId);
+      _syncRx(deviceId);
+      revision.value++;
+    }
   }
 
   void onDeviceStatus({required int deviceId, String? status}) {
@@ -138,14 +197,19 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
     Map<String, dynamic>? positionAttributes,
     Map<String, dynamic>? deviceAttributes,
     DateTime? timestamp,
+    String? protocol,
   }) {
+    _seedFromPrefs(deviceId);
     final changed = tracker.applyInitialSnapshot(
       deviceId: deviceId,
       positionAttributes: positionAttributes,
       deviceAttributes: deviceAttributes,
       timestamp: timestamp,
+      protocol: protocol,
+      lastEngineCommand: _prefs.getEngineCommand(deviceId),
     );
     if (changed) {
+      _persistDisplayState(deviceId);
       _syncRx(deviceId);
     } else {
       _syncRx(deviceId, bump: false);
@@ -161,6 +225,7 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
     for (final p in positions) {
       final id = p.deviceId;
       if (id == null) continue;
+      _seedFromPrefs(id);
       final device = devicesById?[id];
       print(
         '========== ENGINE REST latest (device $id) ==========\n'
@@ -174,16 +239,28 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
         positionAttributes: p.attributes,
         deviceAttributes: device?.attributes,
         timestamp: p.deviceTime ?? p.fixTime ?? p.serverTime,
+        protocol: p.protocol,
+        lastEngineCommand: _prefs.getEngineCommand(id),
       );
       if (changed) _syncRx(id, bump: false);
+      _persistDisplayState(id);
     }
     revision.value++;
   }
 
   /// For devices still unknown after latest positions, query Traccar history.
-  Future<void> backfillUnknownFromHistory(List<int> deviceIds) async {
-    final stillUnknown =
-        deviceIds.where((id) => stateOf(id) == EngineState.unknown).toList();
+  /// Also refresh ct3 units whose latest packet omitted `blocked`.
+  Future<void> backfillUnknownFromHistory(
+    List<int> deviceIds, {
+    Map<int, String?> protocolsByDevice = const {},
+  }) async {
+    final stillUnknown = deviceIds.where((id) {
+      if (stateOf(id) == EngineState.unknown) return true;
+      // ct3: latest may omit blocked — keep scanning until we have it this session
+      final proto = (protocolsByDevice[id] ?? '').toLowerCase();
+      if (proto == 'ct3' && !tracker.reportsBlocked(id)) return true;
+      return false;
+    }).toList();
     if (stillUnknown.isEmpty) {
       print('ENGINE HYDRATE: all devices resolved from latest /api/positions');
       return;
@@ -234,7 +311,13 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
             ...positions.map((p) => p.deviceId).whereType<int>(),
           ].toSet().toList();
 
-      await backfillUnknownFromHistory(ids);
+      await backfillUnknownFromHistory(
+        ids,
+        protocolsByDevice: {
+          for (final p in positions)
+            if (p.deviceId != null) p.deviceId!: p.protocol,
+        },
+      );
     } catch (e) {
       Logger.error('Engine hydrate failed: $e');
     } finally {
@@ -268,7 +351,6 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
       }
 
       for (final id in deviceIds) {
-        if (stateOf(id) != EngineState.unknown) continue;
         final list = byDevice[id] ?? const <PositionModel>[];
         list.sort((a, b) {
           final ta = a.deviceTime ?? a.fixTime ?? a.serverTime;
@@ -300,6 +382,7 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
             'ENGINE HYDRATE device $id → ${stateOf(id)} '
             '(from history attributes)',
           );
+          _persistDisplayState(id);
           _syncRx(id, bump: false);
         } else if (list.isNotEmpty) {
           // No blocked/RELAY — drive ON/OFF from ignition locally (ct1).
@@ -412,8 +495,14 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
         timestamp: position?.deviceTime ??
             position?.fixTime ??
             position?.serverTime,
+        protocol: position?.protocol,
+        lastEngineCommand: _prefs.getEngineCommand(deviceId),
       );
-      if (changed) _syncRx(deviceId);
+      if (changed) {
+        _persistDisplayState(deviceId);
+        _syncRx(deviceId);
+        revision.value++;
+      }
 
       if (stateOf(deviceId) == EngineState.unknown) {
         await _backfillFromHistory([deviceId]);

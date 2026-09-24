@@ -86,6 +86,7 @@ class DeviceDetailController extends GetxController {
       deviceTime: position.deviceTime,
       fixTime: position.fixTime,
       serverTime: position.serverTime,
+      protocol: position.protocol,
     );
   }
 
@@ -100,6 +101,7 @@ class DeviceDetailController extends GetxController {
       timestamp: position?.deviceTime ??
           position?.fixTime ??
           position?.serverTime,
+      protocol: position?.protocol,
     );
     // Ignore future — fire history backfill for real blocked/RELAY data.
     _engineStates.refreshDeviceFromTraccar(deviceId);

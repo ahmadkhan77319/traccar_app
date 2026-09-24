@@ -248,6 +248,123 @@ void main() {
       expect(tracker.stateOf(9), EngineState.off);
     });
 
+    test('ct3 defaults ON without blocked; blocked flips ON/OFF immediately', () {
+      tracker.applyInitialSnapshot(
+        deviceId: 1797,
+        positionAttributes: {'ignition': false},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 10),
+      );
+      expect(tracker.isCt3(1797), isTrue);
+      expect(tracker.stateOf(1797), EngineState.on);
+
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'blocked': false, 'ignition': false},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 10, 1),
+      );
+      expect(tracker.stateOf(1797), EngineState.on);
+      expect(tracker.reportsBlocked(1797), isTrue);
+
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'blocked': true},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 10, 2),
+      );
+      expect(tracker.stateOf(1797), EngineState.off);
+
+      // GPS packet without blocked keeps last real status.
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'ignition': true, 'type': 18},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 10, 3),
+      );
+      expect(tracker.stateOf(1797), EngineState.off);
+
+      // RELAY without blocked updates status.
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'result': 'RELAY 0 OK', 'ignition': true},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 10, 4),
+      );
+      expect(tracker.stateOf(1797), EngineState.on);
+    });
+
+    test('ct3 uses last command when blocked null on first load', () {
+      tracker.applyInitialSnapshot(
+        deviceId: 1797,
+        positionAttributes: {'ignition': true},
+        protocol: 'ct3',
+        lastEngineCommand: 'engineStop',
+        timestamp: DateTime(2026, 9, 23, 11),
+      );
+      expect(tracker.stateOf(1797), EngineState.off);
+    });
+
+    test('ct3 last command wins over stale ON when blocked null', () {
+      tracker.applyInitialSnapshot(
+        deviceId: 1797,
+        positionAttributes: {'ignition': true},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 11, 0),
+      );
+      expect(tracker.stateOf(1797), EngineState.on);
+
+      tracker.applyInitialSnapshot(
+        deviceId: 1797,
+        positionAttributes: {'ignition': true, 'type': 18},
+        protocol: 'ct3',
+        lastEngineCommand: 'engineStop',
+        timestamp: DateTime(2026, 9, 23, 11, 1),
+      );
+      expect(tracker.stateOf(1797), EngineState.off);
+    });
+
+    test('ct3 command applies locally when blocked omitted', () {
+      tracker.noteProtocol(1797, 'ct3');
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'blocked': true},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 12),
+      );
+      expect(tracker.stateOf(1797), EngineState.off);
+
+      expect(tracker.confirmLocalCommand(1797, 'engineResume'), isTrue);
+      expect(tracker.stateOf(1797), EngineState.on);
+
+      // Stale RELAY 1 from previous Stop must not overwrite Resume → ON.
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'result': 'RELAY 1 OK', 'ignition': true},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 12, 0, 30),
+      );
+      expect(tracker.stateOf(1797), EngineState.on);
+
+      // Matching RELAY 0 confirms Resume.
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'result': 'RELAY 0 OK', 'ignition': true},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 12, 0, 45),
+      );
+      expect(tracker.stateOf(1797), EngineState.on);
+
+      // Real blocked still wins when it arrives.
+      tracker.onPositionUpdate(
+        deviceId: 1797,
+        attributes: {'blocked': true, 'type': 19},
+        protocol: 'ct3',
+        timestamp: DateTime(2026, 9, 23, 12, 1),
+      );
+      expect(tracker.stateOf(1797), EngineState.off);
+    });
+
     test('ignition fallback for no-relay devices; blocked still wins for 1797', () {
       expect(tracker.stateOf(504), EngineState.unknown);
       tracker.enableIgnitionFallback(
@@ -282,8 +399,6 @@ void main() {
       );
       expect(tracker.stateOf(1797), EngineState.on);
       expect(tracker.usesIgnitionFallback(1797), isFalse);
-      expect(tracker.confirmLocalCommand(1797, 'engineStop'), isFalse);
-      expect(tracker.stateOf(1797), EngineState.on);
 
       tracker.enableIgnitionFallback(
         596,

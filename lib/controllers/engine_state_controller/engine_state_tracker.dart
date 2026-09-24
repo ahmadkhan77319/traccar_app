@@ -116,6 +116,8 @@ class EngineStateTracker {
   final Set<int> _localCommandLocked = {};
   /// Seen real `blocked` this session — never use local-command mode for these.
   final Set<int> _hadBlocked = {};
+  /// Protocol ct3 — immobilizer via `blocked`; default ON when missing.
+  final Set<int> _ct3Devices = {};
 
   EngineState stateOf(int deviceId) =>
       _states[deviceId] ?? EngineState.unknown;
@@ -130,6 +132,57 @@ class EngineStateTracker {
 
   /// True only after Traccar sent a real `blocked` value for this device.
   bool reportsBlocked(int deviceId) => _hadBlocked.contains(deviceId);
+
+  bool isCt3(int deviceId) => _ct3Devices.contains(deviceId);
+
+  void noteProtocol(int deviceId, String? protocol) {
+    if ((protocol ?? '').toLowerCase() == 'ct3') {
+      _ct3Devices.add(deviceId);
+    }
+  }
+
+  /// Restore session memory from disk (survives app restart).
+  /// Does not overwrite an in-memory ON/OFF (e.g. after Stop/Resume).
+  void seedBlockedFromCache(
+    int deviceId, {
+    required bool reportsBlocked,
+    EngineState? state,
+  }) {
+    if (!reportsBlocked) return;
+    _hadBlocked.add(deviceId);
+    _ignitionMode.remove(deviceId);
+    final current = _states[deviceId];
+    if (current == EngineState.on || current == EngineState.off) {
+      return;
+    }
+    if (state == EngineState.on || state == EngineState.off) {
+      _lastConfirmed[deviceId] = state!;
+      _states[deviceId] = state!;
+    }
+  }
+
+  /// Restore last Stop/Resume when live `blocked` is missing.
+  void seedCommandFromCache(int deviceId, String? commandType) {
+    if (commandType != 'engineStop' && commandType != 'engineResume') {
+      return;
+    }
+    final current = _states[deviceId];
+    if (current == EngineState.on || current == EngineState.off) {
+      // applyInitialSnapshot still prefers [lastEngineCommand] when blocked is null.
+      return;
+    }
+    _localCommandLocked.add(deviceId);
+    final state =
+        commandType == 'engineStop' ? EngineState.off : EngineState.on;
+    _lastConfirmed[deviceId] = state;
+    _states[deviceId] = state;
+  }
+
+  EngineState? _stateFromCommand(String? commandType) {
+    if (commandType == 'engineStop') return EngineState.off;
+    if (commandType == 'engineResume') return EngineState.on;
+    return null;
+  }
 
   /// Mark command pending *before* HTTP completes. Replaces any prior pending.
   void markCommandPending(int deviceId, String commandType) {
@@ -152,31 +205,60 @@ class EngineStateTracker {
     required int deviceId,
     Map<String, dynamic>? attributes,
     DateTime? timestamp,
+    String? protocol,
+    String? lastEngineCommand,
   }) {
-    if (!_acceptTimestamp(deviceId, timestamp)) return false;
+    noteProtocol(deviceId, protocol);
 
     final pendingType = _pending[deviceId]?.commandType;
     final hasBlocked = attributes != null &&
         attributes.containsKey('blocked') &&
         attributes['blocked'] != null;
 
-    // Real blocked always wins — leave local-only mode.
+    // `blocked` is authoritative for immobilizer — accept equal/newer times.
     if (hasBlocked) {
       _hadBlocked.add(deviceId);
       _ignitionMode.remove(deviceId);
       _localCommandLocked.remove(deviceId);
+      if (timestamp != null) {
+        final last = _lastAppliedAt[deviceId];
+        if (last != null && timestamp.isBefore(last)) {
+          return false;
+        }
+        _lastAppliedAt[deviceId] = timestamp;
+      }
+    } else if (!_acceptTimestamp(deviceId, timestamp)) {
+      return false;
     }
 
     final resolved = resolveEngineState(
       attributes,
       pendingCommandType: pendingType,
-      // Never drive immobilizer from live ignition after first paint / command.
+      // ct3: honor RELAY 0/1 when blocked omitted — but not stale RELAY
+      // after a newer local Stop/Resume (see match below).
+      inferFromRelayResult: _ct3Devices.contains(deviceId) &&
+          !_localCommandLocked.contains(deviceId),
       useIgnitionFallback: false,
     );
 
     if (resolved == EngineState.on || resolved == EngineState.off) {
       _clearPending(deviceId);
       return _setConfirmed(deviceId, resolved);
+    }
+
+    // Stale RELAY while waiting for device: only accept RELAY that matches
+    // the command we just confirmed locally (RELAY 1 after Stop, 0 after Resume).
+    if (_ct3Devices.contains(deviceId) &&
+        _localCommandLocked.contains(deviceId) &&
+        attributes != null &&
+        attributes['result'] != null) {
+      final fromRelay = _relayResultToState(attributes['result'].toString());
+      final expected = _lastConfirmed[deviceId];
+      if (fromRelay != null && fromRelay == expected) {
+        _localCommandLocked.remove(deviceId);
+        _clearPending(deviceId);
+        return _setConfirmed(deviceId, fromRelay);
+      }
     }
 
     if (resolved == EngineState.commandFailed) {
@@ -186,8 +268,19 @@ class EngineStateTracker {
       return prev != EngineState.commandFailed;
     }
 
-    // unknown: keep pending if waiting; otherwise keep last known on/off
-    // (critical for ct1: ignition flips must not wipe local Stop/Resume state)
+    // No blocked on this packet: prefer last Stop/Resume, else keep / default ON.
+    if (_ct3Devices.contains(deviceId) && pendingType == null) {
+      final fromCmd = _stateFromCommand(lastEngineCommand);
+      if (fromCmd != null) {
+        return _setConfirmed(deviceId, fromCmd);
+      }
+      final prev = _states[deviceId];
+      if (prev == EngineState.on || prev == EngineState.off) {
+        return false;
+      }
+      return _setConfirmed(deviceId, EngineState.on);
+    }
+
     if (pendingType != null) {
       return false;
     }
@@ -202,7 +295,11 @@ class EngineStateTracker {
     Map<String, dynamic>? positionAttributes,
     Map<String, dynamic>? deviceAttributes,
     DateTime? timestamp,
+    String? protocol,
+    String? lastEngineCommand,
   }) {
+    noteProtocol(deviceId, protocol);
+
     final hasBlocked = (positionAttributes != null &&
             positionAttributes.containsKey('blocked') &&
             positionAttributes['blocked'] != null) ||
@@ -226,34 +323,63 @@ class EngineStateTracker {
     var attrs = positionAttributes;
     final fromPos = resolveEngineState(
       attrs,
-      inferFromRelayResult: true,
+      inferFromRelayResult: !_localCommandLocked.contains(deviceId),
       useIgnitionFallback: false,
     );
     if (fromPos == EngineState.on || fromPos == EngineState.off) {
-      // Initial REST must apply even if a WS packet already stamped a time.
       if (timestamp != null) {
         final last = _lastAppliedAt[deviceId];
-        if (last == null || !timestamp.isBefore(last)) {
-          _lastAppliedAt[deviceId] = timestamp;
+        if (last != null && timestamp.isBefore(last)) {
+          return false;
         }
+        _lastAppliedAt[deviceId] = timestamp;
       }
       return _setConfirmed(deviceId, fromPos);
+    }
+
+    // Matching RELAY after local command unlocks and confirms.
+    if (_localCommandLocked.contains(deviceId) &&
+        positionAttributes != null &&
+        positionAttributes['result'] != null) {
+      final fromRelay =
+          _relayResultToState(positionAttributes['result'].toString());
+      final expected = _lastConfirmed[deviceId];
+      if (fromRelay != null && fromRelay == expected) {
+        _localCommandLocked.remove(deviceId);
+        if (timestamp != null) _lastAppliedAt[deviceId] = timestamp;
+        return _setConfirmed(deviceId, fromRelay);
+      }
     }
 
     attrs = deviceAttributes;
     final fromDev = resolveEngineState(
       attrs,
-      inferFromRelayResult: true,
+      inferFromRelayResult: !_localCommandLocked.contains(deviceId),
       useIgnitionFallback: false,
     );
     if (fromDev == EngineState.on || fromDev == EngineState.off) {
       if (timestamp != null) {
         final last = _lastAppliedAt[deviceId];
-        if (last == null || !timestamp.isBefore(last)) {
-          _lastAppliedAt[deviceId] = timestamp;
+        if (last != null && timestamp.isBefore(last)) {
+          return false;
         }
+        _lastAppliedAt[deviceId] = timestamp;
       }
       return _setConfirmed(deviceId, fromDev);
+    }
+
+    // ct3 + no blocked: last Stop/Resume wins over stale memory/cache.
+    if (_ct3Devices.contains(deviceId)) {
+      final fromCmd = _stateFromCommand(lastEngineCommand);
+      if (fromCmd != null) {
+        _localCommandLocked.add(deviceId);
+        return _setConfirmed(deviceId, fromCmd);
+      }
+      final prev = _states[deviceId];
+      if (prev == EngineState.on || prev == EngineState.off) {
+        return false;
+      }
+      return _setConfirmed(deviceId, EngineState.on);
     }
 
     final prev = _states[deviceId];
@@ -315,8 +441,10 @@ class EngineStateTracker {
     for (final deviceId in expired) {
       final pending = _pending[deviceId];
       _clearPending(deviceId);
-      // No-relay devices: confirm locally from the command we sent.
-      if (_ignitionMode.contains(deviceId) && pending != null) {
+      // No live blocked yet: confirm from the command we sent (ct1 / ct3).
+      if (pending != null &&
+          (_ignitionMode.contains(deviceId) ||
+              _ct3Devices.contains(deviceId))) {
         final local = pending.commandType == 'engineStop'
             ? EngineState.off
             : EngineState.on;
@@ -381,11 +509,12 @@ class EngineStateTracker {
     return prev != EngineState.noRelayData;
   }
 
-  /// Local confirm after Stop/Resume accepted.
-  /// Only for devices that never reported `blocked` this session (ct1).
+  /// After Stop/Resume accepted: show command status immediately.
+  /// A later non-null `blocked` (or RELAY result) always overwrites this.
   bool confirmLocalCommand(int deviceId, String commandType) {
-    if (_hadBlocked.contains(deviceId)) return false;
-    _ignitionMode.add(deviceId);
+    if (!_hadBlocked.contains(deviceId) && !_ct3Devices.contains(deviceId)) {
+      _ignitionMode.add(deviceId);
+    }
     _localCommandLocked.add(deviceId);
     _clearPending(deviceId);
     final state =
@@ -401,6 +530,9 @@ class EngineStateTracker {
     _states[deviceId] = state;
     return prev != state || prevConfirmed != state;
   }
+
+  /// Devices that currently have a confirmed blocked-based ON/OFF.
+  Iterable<int> get devicesWithBlockedReport => _hadBlocked;
 
   void _clearPending(int deviceId) {
     _pending.remove(deviceId);

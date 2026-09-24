@@ -90,4 +90,20 @@ class SharedPrefsRepository {
   Future<void> setEngineCommand(int deviceId, String type) async {
     await _prefs.setString('$_engineCommandPrefix$deviceId', type);
   }
+
+  /// Device has reported `blocked` at least once (ct3-style immobilizer).
+  bool deviceReportsBlocked(int deviceId) =>
+      _prefs.getBool('ENGINE_HAS_BLOCKED_$deviceId') ?? false;
+
+  Future<void> setDeviceReportsBlocked(int deviceId, bool value) async {
+    await _prefs.setBool('ENGINE_HAS_BLOCKED_$deviceId', value);
+  }
+
+  /// Last known blocked-based state: `on` or `off`.
+  String? getEngineBlockedState(int deviceId) =>
+      _prefs.getString('ENGINE_BLOCKED_STATE_$deviceId');
+
+  Future<void> setEngineBlockedState(int deviceId, String state) async {
+    await _prefs.setString('ENGINE_BLOCKED_STATE_$deviceId', state);
+  }
 }

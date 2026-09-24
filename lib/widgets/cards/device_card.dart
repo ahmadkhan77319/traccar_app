@@ -123,6 +123,7 @@ class DeviceCard extends StatelessWidget {
                   final show = engine.showsEngineUi(
                     device.id,
                     positionAttributes: device.position?.attributes,
+                    protocol: device.position?.protocol,
                   );
                   if (!show) {
                     return const SizedBox.shrink();
@@ -238,14 +239,12 @@ class _EngineStatusMetric extends StatelessWidget {
           label = '$label · $confirmedLabel';
         }
       }
-      // First paint: if tracker not updated yet but position has blocked.
-      if (state == EngineState.unknown || state == EngineState.noRelayData) {
-        final blocked = device.position?.attributes?['blocked'];
-        if (blocked == true) {
-          label = 'Engine OFF';
-        } else if (blocked == false) {
-          label = 'Engine ON';
-        }
+      // Live blocked on this position wins over everything else.
+      final blocked = device.position?.attributes?['blocked'];
+      if (blocked == true) {
+        label = 'Engine OFF';
+      } else if (blocked == false) {
+        label = 'Engine ON';
       }
       return _build(label, state: state);
     });

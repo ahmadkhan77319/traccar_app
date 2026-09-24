@@ -269,6 +269,7 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                       if (engineCtrl.showsEngineUi(
                         device.id,
                         positionAttributes: device.position?.attributes,
+                        protocol: device.position?.protocol,
                       )) ...[
                       Container(
                         padding: const EdgeInsets.all(14),

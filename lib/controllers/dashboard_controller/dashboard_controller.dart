@@ -143,10 +143,16 @@ class DashboardController extends GetxController {
           )
           .toList();
 
-      await _engineStates.backfillUnknownFromHistory([
-        for (final d in deviceList)
-          if (d.id != null) d.id!,
-      ]);
+      await _engineStates.backfillUnknownFromHistory(
+        [
+          for (final d in deviceList)
+            if (d.id != null) d.id!,
+        ],
+        protocolsByDevice: {
+          for (final e in positionsByDevice.entries)
+            e.key: e.value.protocol,
+        },
+      );
 
       Logger.success('Loaded ${devices.length} devices');
     } on DioException catch (e) {
@@ -208,6 +214,7 @@ class DashboardController extends GetxController {
         deviceTime: updated.deviceTime,
         fixTime: updated.fixTime,
         serverTime: updated.serverTime,
+        protocol: updated.protocol,
       );
       final existing = current[id];
       if (existing != null) {
