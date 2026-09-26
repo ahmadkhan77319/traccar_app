@@ -99,7 +99,7 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                     : (engineState == EngineState.commandFailed
                         ? 'Device rejected or returned an error'
                         : (engineState == EngineState.unknown
-                            ? 'Waiting for relay / blocked from Traccar'
+                            ? 'Default ON until blocked is reported'
                             : (engineState == EngineState.noRelayData
                                 ? 'This tracker does not report immobilizer state'
                                 : (ignitionMode
@@ -114,7 +114,10 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                                                 : 'Ignition is OFF (ACC)')
                                             : 'Live relay state from Traccar'))))))));
         final engineColor = liveBlocked == false ||
-                (liveBlocked == null && engineState == EngineState.on)
+                (liveBlocked == null &&
+                    (engineState == EngineState.on ||
+                        engineState == EngineState.unknown ||
+                        engineLabel == 'Engine ON'))
             ? AppColors.success
             : (liveBlocked == true ||
                     (liveBlocked == null && engineState == EngineState.off)
