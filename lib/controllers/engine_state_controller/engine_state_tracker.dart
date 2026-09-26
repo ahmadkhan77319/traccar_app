@@ -148,16 +148,17 @@ class EngineStateTracker {
     required bool reportsBlocked,
     EngineState? state,
   }) {
-    if (!reportsBlocked) return;
-    _hadBlocked.add(deviceId);
-    _ignitionMode.remove(deviceId);
+    if (reportsBlocked) {
+      _hadBlocked.add(deviceId);
+      _ignitionMode.remove(deviceId);
+    }
     final current = _states[deviceId];
     if (current == EngineState.on || current == EngineState.off) {
       return;
     }
     if (state == EngineState.on || state == EngineState.off) {
       _lastConfirmed[deviceId] = state!;
-      _states[deviceId] = state!;
+      _states[deviceId] = state;
     }
   }
 
@@ -194,6 +195,17 @@ class EngineStateTracker {
       deadlineMonoMs: now + pendingTimeout.inMilliseconds,
     );
     _states[deviceId] = EngineState.pending;
+  }
+
+  /// POST /commands/send failed — clear pending, restore last known ON/OFF.
+  void failCommandSend(int deviceId) {
+    _clearPending(deviceId);
+    final confirmed = _lastConfirmed[deviceId];
+    if (confirmed == EngineState.on || confirmed == EngineState.off) {
+      _states[deviceId] = confirmed!;
+    } else {
+      _states[deviceId] = EngineState.unknown;
+    }
   }
 
   /// Apply position/device attributes. Newer [timestamp] always wins (REST vs WS).
@@ -509,12 +521,10 @@ class EngineStateTracker {
     return prev != EngineState.noRelayData;
   }
 
-  /// After Stop/Resume accepted: show command status immediately.
-  /// A later non-null `blocked` (or RELAY result) always overwrites this.
+  /// After Stop/Resume accepted: show command status immediately when
+  /// live `blocked` is missing. A later non-null `blocked` overwrites this.
   bool confirmLocalCommand(int deviceId, String commandType) {
-    if (!_hadBlocked.contains(deviceId) && !_ct3Devices.contains(deviceId)) {
-      _ignitionMode.add(deviceId);
-    }
+    _ignitionMode.add(deviceId);
     _localCommandLocked.add(deviceId);
     _clearPending(deviceId);
     final state =

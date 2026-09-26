@@ -34,14 +34,22 @@ class RequestClient {
           handler.next(response);
         },
         onError: (DioException e, handler) {
+          final originalDetail = e.error?.toString() ?? e.message;
           final networkError = NetworkException(
             type: _parseErrorType(e),
-            message: e.message ?? 'An unknown error occurred',
+            message: originalDetail ?? 'An unknown error occurred',
             statusCode: e.response?.statusCode,
-            errorBody: e.response?.data,
+            errorBody: e.response?.data ?? e.error,
           );
           if (kDebugMode) {
-            print('Network Error: $networkError');
+            print(
+              'Network Error: $networkError\n'
+              'dioType: ${e.type}\n'
+              'dioMessage: ${e.message}\n'
+              'dioError: ${e.error}\n'
+              'url: ${e.requestOptions.uri}\n'
+              'method: ${e.requestOptions.method}',
+            );
           }
           handler.reject(
             DioException(
@@ -49,6 +57,7 @@ class RequestClient {
               response: e.response,
               type: e.type,
               error: networkError,
+              message: networkError.message,
             ),
           );
 

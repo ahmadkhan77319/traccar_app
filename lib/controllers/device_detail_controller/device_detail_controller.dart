@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -61,6 +62,12 @@ class DeviceDetailController extends GetxController {
 
   /// True when engine is treated as stopped (show Resume button).
   bool get isEngineStopped {
+    // Live blocked wins.
+    final blocked =
+        DeviceModel.blockedFrom(deviceView.value?.position?.attributes);
+    if (blocked == true) return true;
+    if (blocked == false) return false;
+
     final engine = _engineStates;
     final state = engine.stateOf(deviceId);
     switch (state) {
@@ -75,7 +82,11 @@ class DeviceDetailController extends GetxController {
         return engine.lastConfirmedOf(deviceId) == EngineState.off;
       case EngineState.unknown:
       case EngineState.noRelayData:
-        return false;
+        final cmd = lastEngineCommand.value ??
+            sharedPrefsRepository.getEngineCommand(deviceId);
+        if (cmd == 'engineStop') return true;
+        if (cmd == 'engineResume') return false;
+        return sharedPrefsRepository.getEngineBlockedState(deviceId) == 'off';
     }
   }
 
@@ -273,39 +284,67 @@ class DeviceDetailController extends GetxController {
       // Optimistic pending *before* HTTP resolves.
       _engineStates.markCommandPending(deviceId, type);
 
+      final requestBody = <String, dynamic>{
+        'deviceId': deviceId,
+        'type': type,
+        'attributes': <String, dynamic>{},
+      };
+
+      // Traccar may return 200/202 with an empty body; default JSON decode
+      // then throws FormatException → DioExceptionType.unknown / status null.
       final response = await _requestClient.request<Response>(
         url: AppUrl.commandsSend,
         method: RequestType.post,
-        body: <String, dynamic>{
-          'deviceId': deviceId,
-          'type': type,
-          'attributes': <String, dynamic>{},
-        },
+        body: requestBody,
+        options: Options(
+          responseType: ResponseType.plain,
+          validateStatus: (code) => code != null && code >= 200 && code < 300,
+        ),
       );
 
-      final data = response.data;
-      print('========== ENGINE COMMAND RESPONSE ==========');
-      print('HTTP status: ${response.statusCode} ${response.statusMessage}');
-      print('meaning: command ACCEPTED by Traccar (not device confirmed)');
-      if (data is Map) {
-        print('id: ${data['id']}');
-        print('deviceId: ${data['deviceId']}');
-        print('type: ${data['type']}');
-        print('textChannel: ${data['textChannel']}');
-        print('attributes: ${data['attributes']}');
-        print('full data: $data');
-      } else {
-        print('data: $data');
+      final raw = response.data;
+      dynamic data = raw;
+      if (raw is String && raw.trim().isNotEmpty) {
+        try {
+          data = jsonDecode(raw);
+        } catch (_) {
+          data = raw;
+        }
+      } else if (raw is String && raw.trim().isEmpty) {
+        data = null;
       }
-      print('=============================================');
+
+      print('========== ENGINE COMMAND — EXACT RESPONSE ==========');
+      print('REQUEST');
+      print('  POST ${AppUrl.commandsSend}');
+      print('  body: $requestBody');
+      print('RESPONSE');
+      print('  status: ${response.statusCode} ${response.statusMessage}');
+      print('  headers: ${response.headers.map}');
+      print('  exact body (raw): $raw');
+      print('  exact body (type): ${raw.runtimeType}');
+      print('  exact body (parsed): $data');
+      print('=====================================================');
       Logger.success(
-        'Engine $type response [${response.statusCode}]: $data',
+        'Engine $type exact response [${response.statusCode}]: $raw',
       );
 
       lastEngineCommand.value = type;
       await sharedPrefsRepository.setEngineCommand(deviceId, type);
-      // ct1 / no-relay: no blocked confirmation — apply ON/OFF locally.
-      _engineStates.confirmLocalCommandIfIgnitionMode(deviceId, type);
+      // If live blocked is null, apply ON/OFF locally and persist prefs.
+      // When blocked arrives later it overwrites via onPositionUpdate.
+      final liveBlocked =
+          DeviceModel.blockedFrom(deviceView.value?.position?.attributes);
+      if (liveBlocked == null) {
+        _engineStates.applyCommandLocallyUntilBlocked(deviceId, type);
+      } else {
+        // blocked already present — still sync command prefs; state from blocked.
+        await sharedPrefsRepository.setEngineBlockedState(
+          deviceId,
+          liveBlocked ? 'off' : 'on',
+        );
+        await sharedPrefsRepository.setDeviceReportsBlocked(deviceId, true);
+      }
 
       final current = deviceView.value;
       if (current != null) {
@@ -323,24 +362,31 @@ class DeviceDetailController extends GetxController {
         loadDevice(showLoader: false);
       });
     } on DioException catch (e) {
-      print('========== ENGINE COMMAND ERROR ==========');
-      print('command: $type');
-      print('deviceId: $deviceId');
-      print('statusCode: ${e.response?.statusCode}');
-      print('response data: ${e.response?.data}');
-      print('error: ${e.message}');
-      print('==========================================');
+      _engineStates.failCommandSend(deviceId);
+      final exact = e.response?.data;
+      print('========== ENGINE COMMAND — EXACT RESPONSE (ERROR) ==========');
+      print('REQUEST');
+      print('  POST ${AppUrl.commandsSend}');
+      print('  body: {deviceId: $deviceId, type: $type, attributes: {}}');
+      print('RESPONSE');
+      print('  status: ${e.response?.statusCode} ${e.response?.statusMessage}');
+      print('  headers: ${e.response?.headers.map}');
+      print('  exact body (raw): $exact');
+      print('  exact body (type): ${exact.runtimeType}');
+      print('  dioType: ${e.type}');
+      print('==============================================================');
       Logger.error(
-        'Engine $type failed [${e.response?.statusCode}]: ${e.response?.data}',
+        'Engine $type exact response [${e.response?.statusCode}]: $exact',
       );
       if (context.mounted) {
         Common.showDioErrorDialog(context, e: e);
       }
     } catch (e) {
-      print('========== ENGINE COMMAND ERROR ==========');
+      _engineStates.failCommandSend(deviceId);
+      print('========== ENGINE COMMAND — EXACT RESPONSE (ERROR) ==========');
       print('command: $type');
-      print('error: $e');
-      print('==========================================');
+      print('exact error: $e');
+      print('==============================================================');
       snackBarCustom(
         title: 'Error',
         message: e.toString(),

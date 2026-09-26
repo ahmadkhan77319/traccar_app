@@ -120,12 +120,7 @@ class DeviceCard extends StatelessWidget {
                 Obx(() {
                   final engine = Get.find<EngineStateController>();
                   engine.revision.value;
-                  final show = engine.showsEngineUi(
-                    device.id,
-                    positionAttributes: device.position?.attributes,
-                    protocol: device.position?.protocol,
-                  );
-                  if (!show) {
+                  if (!device.engineKillCapable) {
                     return const SizedBox.shrink();
                   }
                   return Column(

@@ -70,38 +70,36 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
   EngineState? lastConfirmedOf(int deviceId) =>
       tracker.lastConfirmedOf(deviceId);
 
-  /// Show engine status / Stop-Resume only when Traccar reports `blocked`.
   bool reportsBlocked(int deviceId) => tracker.reportsBlocked(deviceId);
 
-  /// Same check, also trusting position attrs, ct3 protocol, or cached blocked.
-  bool showsEngineUi(
-    int deviceId, {
-    Map<String, dynamic>? positionAttributes,
-    String? protocol,
+  /// Show engine status / Stop-Resume only when device is engine-kill capable.
+  bool showsEngineUi({
+    Map<String, dynamic>? deviceAttributes,
+    bool? engineKillCapable,
   }) {
-    if (tracker.reportsBlocked(deviceId)) return true;
-    if (_prefs.deviceReportsBlocked(deviceId)) return true;
-    if (positionAttributes?['blocked'] != null) return true;
-    // ct3 always has immobilizer support — show while waiting for blocked.
-    final proto = (protocol ?? '').toLowerCase();
-    if (proto == 'ct3') return true;
+    if (engineKillCapable != null) return engineKillCapable;
+    final v = deviceAttributes?['engineKillCapable'];
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final s = v.toLowerCase().trim();
+      return s == 'true' || s == '1' || s == 'yes';
+    }
     return false;
   }
 
   void _seedFromPrefs(int deviceId) {
-    // Command first — when blocked is null we show what the user last sent.
+    // When blocked is missing, show last Stop/Resume from prefs.
     final cmd = _prefs.getEngineCommand(deviceId);
     if (cmd == 'engineStop' || cmd == 'engineResume') {
       tracker.seedCommandFromCache(deviceId, cmd);
     }
-    if (!_prefs.deviceReportsBlocked(deviceId)) return;
     final raw = _prefs.getEngineBlockedState(deviceId);
-    EngineState? state;
-    if (raw == 'on') state = EngineState.on;
-    if (raw == 'off') state = EngineState.off;
+    if (raw != 'on' && raw != 'off') return;
+    final state = raw == 'on' ? EngineState.on : EngineState.off;
     tracker.seedBlockedFromCache(
       deviceId,
-      reportsBlocked: true,
+      reportsBlocked: _prefs.deviceReportsBlocked(deviceId),
       state: state,
     );
   }
@@ -124,6 +122,21 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
     );
   }
 
+  /// Persist live `blocked` into prefs whenever Traccar sends it.
+  void _persistBlockedIfPresent(
+    int deviceId,
+    Map<String, dynamic>? attributes,
+  ) {
+    final blocked = DeviceModel.blockedFrom(attributes);
+    if (blocked == null) return;
+    _prefs.setDeviceReportsBlocked(deviceId, true);
+    _prefs.setEngineBlockedState(deviceId, blocked ? 'off' : 'on');
+    _prefs.setEngineCommand(
+      deviceId,
+      blocked ? 'engineStop' : 'engineResume',
+    );
+  }
+
   String labelFor(int deviceId) {
     switch (stateOf(deviceId)) {
       case EngineState.on:
@@ -137,9 +150,14 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
       case EngineState.commandFailed:
         return 'Command failed';
       case EngineState.unknown:
-        // ct3: friendly first paint until snapshot resolves to ON.
-        if (tracker.isCt3(deviceId)) return 'Engine ON';
-        return 'Checking engine status…';
+        final cmd = _prefs.getEngineCommand(deviceId);
+        if (cmd == 'engineStop') return 'Engine OFF';
+        if (cmd == 'engineResume') return 'Engine ON';
+        final cached = _prefs.getEngineBlockedState(deviceId);
+        if (cached == 'off') return 'Engine OFF';
+        if (cached == 'on') return 'Engine ON';
+        // First start / no blocked & no prefs — default Engine ON.
+        return 'Engine ON';
       case EngineState.noRelayData:
         return 'No relay data available';
     }
@@ -150,13 +168,26 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
     _syncRx(deviceId);
   }
 
-  /// After Traccar accepts Stop/Resume — apply ON/OFF when blocked is absent
-  /// (ct1 always; ct3 until the next real `blocked` packet).
+  /// HTTP send failed — drop pending and restore last confirmed / prefs state.
+  void failCommandSend(int deviceId) {
+    tracker.failCommandSend(deviceId);
+    _seedFromPrefs(deviceId);
+    _syncRx(deviceId);
+    revision.value++;
+  }
+
+  /// After Traccar accepts Stop/Resume — apply ON/OFF locally when
+  /// live `blocked` is absent; a later blocked packet overwrites this.
+  void applyCommandLocallyUntilBlocked(int deviceId, String commandType) {
+    tracker.confirmLocalCommand(deviceId, commandType);
+    _persistDisplayState(deviceId);
+    _syncRx(deviceId);
+    revision.value++;
+  }
+
+  @Deprecated('Use applyCommandLocallyUntilBlocked')
   void confirmLocalCommandIfIgnitionMode(int deviceId, String commandType) {
-    if (tracker.confirmLocalCommand(deviceId, commandType)) {
-      _persistDisplayState(deviceId);
-      _syncRx(deviceId);
-    }
+    applyCommandLocallyUntilBlocked(deviceId, commandType);
   }
 
   void onPositionUpdate({
@@ -175,10 +206,10 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
       protocol: protocol,
       lastEngineCommand: _prefs.getEngineCommand(deviceId),
     );
-    // Always refresh UI when blocked is present so card/sheet update immediately.
-    final hasBlocked = attributes != null &&
-        attributes.containsKey('blocked') &&
-        attributes['blocked'] != null;
+    final hasBlocked = DeviceModel.blockedFrom(attributes) != null;
+    if (hasBlocked) {
+      _persistBlockedIfPresent(deviceId, attributes);
+    }
     if (changed || hasBlocked) {
       _persistDisplayState(deviceId);
       _syncRx(deviceId);
@@ -209,9 +240,11 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
       lastEngineCommand: _prefs.getEngineCommand(deviceId),
     );
     if (changed) {
+      _persistBlockedIfPresent(deviceId, positionAttributes);
       _persistDisplayState(deviceId);
       _syncRx(deviceId);
     } else {
+      _persistBlockedIfPresent(deviceId, positionAttributes);
       _syncRx(deviceId, bump: false);
       revision.value++;
     }
@@ -230,6 +263,7 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
       print(
         '========== ENGINE REST latest (device $id) ==========\n'
         'protocol: ${p.protocol}\n'
+        'engineKillCapable: ${device?.engineKillCapable}\n'
         'attributes: ${p.attributes}\n'
         'blocked: ${p.attributes?['blocked']} result: ${p.attributes?['result']}\n'
         '====================================================',
@@ -242,6 +276,7 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
         protocol: p.protocol,
         lastEngineCommand: _prefs.getEngineCommand(id),
       );
+      _persistBlockedIfPresent(id, p.attributes);
       if (changed) _syncRx(id, bump: false);
       _persistDisplayState(id);
     }
@@ -249,18 +284,13 @@ class EngineStateController extends GetxController with WidgetsBindingObserver {
   }
 
   /// For devices still unknown after latest positions, query Traccar history.
-  /// Also refresh ct3 units whose latest packet omitted `blocked`.
   Future<void> backfillUnknownFromHistory(
     List<int> deviceIds, {
     Map<int, String?> protocolsByDevice = const {},
   }) async {
-    final stillUnknown = deviceIds.where((id) {
-      if (stateOf(id) == EngineState.unknown) return true;
-      // ct3: latest may omit blocked — keep scanning until we have it this session
-      final proto = (protocolsByDevice[id] ?? '').toLowerCase();
-      if (proto == 'ct3' && !tracker.reportsBlocked(id)) return true;
-      return false;
-    }).toList();
+    final stillUnknown = deviceIds
+        .where((id) => stateOf(id) == EngineState.unknown)
+        .toList();
     if (stillUnknown.isEmpty) {
       print('ENGINE HYDRATE: all devices resolved from latest /api/positions');
       return;

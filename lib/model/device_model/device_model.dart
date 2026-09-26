@@ -99,6 +99,33 @@ class DeviceModel {
     );
   }
 
+  /// Cartag custom flag: device supports engine Stop / Resume.
+  bool get engineKillCapable {
+    final v = attributes?['engineKillCapable'];
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final s = v.toLowerCase().trim();
+      return s == 'true' || s == '1' || s == 'yes';
+    }
+    return false;
+  }
+
+  /// Live immobilizer from position attrs (`true` = cut / OFF).
+  static bool? blockedFrom(Map<String, dynamic>? attrs) {
+    if (attrs == null || !attrs.containsKey('blocked')) return null;
+    final v = attrs['blocked'];
+    if (v == null) return null;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final s = v.toLowerCase().trim();
+      if (s == 'true' || s == '1') return true;
+      if (s == 'false' || s == '0') return false;
+    }
+    return null;
+  }
+
   static DateTime? _parseDate(String? value) {
     if (value == null || value.isEmpty) return null;
     return DateTime.tryParse(value);

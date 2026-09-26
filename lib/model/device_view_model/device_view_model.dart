@@ -32,6 +32,12 @@ class DeviceViewModel {
   bool get hasIgnitionReport => ignition != null;
   bool? get engineOn => position?.engineOn;
 
+  /// Device supports immobilizer — from `GET /api/devices` attributes.
+  bool get engineKillCapable => device.engineKillCapable;
+
+  /// Live `blocked` from latest position (`true` = Engine OFF).
+  bool? get blocked => DeviceModel.blockedFrom(position?.attributes);
+
   /// Display status: last stop/resume command updates UI immediately;
   /// otherwise uses latest position `attributes.ignition`.
   String get engineStatusLabel {

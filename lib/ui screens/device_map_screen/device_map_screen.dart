@@ -73,7 +73,13 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
         final engineState = engineRx.value;
         final confirmed = engineCtrl.lastConfirmedOf(device.id);
         var engineLabel = engineCtrl.labelFor(device.id);
-        if (engineState == EngineState.commandFailed ||
+        // Live blocked from position wins for label + Stop/Resume.
+        final liveBlocked = device.blocked;
+        if (liveBlocked == true) {
+          engineLabel = 'Engine OFF';
+        } else if (liveBlocked == false) {
+          engineLabel = 'Engine ON';
+        } else if (engineState == EngineState.commandFailed ||
             engineState == EngineState.unconfirmed) {
           final confirmedLabel = confirmed == EngineState.on
               ? 'Engine ON'
@@ -107,9 +113,11 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                                                 ? 'Ignition is ON (ACC)'
                                                 : 'Ignition is OFF (ACC)')
                                             : 'Live relay state from Traccar'))))))));
-        final engineColor = engineState == EngineState.on
+        final engineColor = liveBlocked == false ||
+                (liveBlocked == null && engineState == EngineState.on)
             ? AppColors.success
-            : (engineState == EngineState.off
+            : (liveBlocked == true ||
+                    (liveBlocked == null && engineState == EngineState.off)
                 ? AppColors.danger
                 : (engineState == EngineState.pending
                     ? AppColors.warning
@@ -272,11 +280,8 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                           ),
                         ),
                       const SizedBox(height: 8),
-                      if (engineCtrl.showsEngineUi(
-                        device.id,
-                        positionAttributes: device.position?.attributes,
-                        protocol: device.position?.protocol,
-                      )) ...[
+                      // Show only when device.attributes.engineKillCapable == true
+                      if (device.engineKillCapable) ...[
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -339,7 +344,7 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      // One action at a time: Resume when stopped, Stop when running.
+                      // blocked true → Resume; blocked false / local ON → Stop
                       if (engineStopped)
                         SizedBox(
                           width: double.infinity,
