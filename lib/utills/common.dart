@@ -66,25 +66,37 @@ class Common {
     return '${local.day}/${local.month}/${local.year} $h:$m:$s';
   }
 
-  /// Opens coordinates in Google Maps the same way as Vibe en-route "View on Map".
+  /// Opens Google Maps at the tracker GPS fix.
+  ///
+  /// - Without [address]: pin only (`lat,lng`).
+  /// - With [address]: same exact pin, address used as the marker label
+  ///   (`lat,lng (Address)`) — not an address search (avoids multiple results).
   static Future<void> openInGoogleMaps(
     double lat,
     double lng, {
     String? address,
   }) async {
     final cleaned = address?.trim();
-    final query = (cleaned != null &&
-            cleaned.isNotEmpty &&
-            cleaned != '—' &&
-            cleaned != '-' &&
-            cleaned != 'Address unavailable')
-        ? cleaned
-        : '$lat,$lng';
+    final hasAddress = cleaned != null &&
+        cleaned.isNotEmpty &&
+        cleaned != '—' &&
+        cleaned != '-' &&
+        cleaned != 'Address unavailable';
 
-    final uri = Uri.https('www.google.com', '/maps/search/', {
-      'api': '1',
-      'query': query,
-    });
+    // Parentheses label keeps a single pin on the coordinates; do not use
+    // address-as-query or Address@lat,lng (those open a multi-result search).
+    final Uri uri;
+    if (hasAddress) {
+      final label = cleaned.replaceAll(RegExp(r'[()]'), '').trim();
+      uri = Uri.https('www.google.com', '/maps', {
+        'q': '$lat,$lng ($label)',
+      });
+    } else {
+      uri = Uri.https('www.google.com', '/maps/search/', {
+        'api': '1',
+        'query': '$lat,$lng',
+      });
+    }
 
     try {
       if (await canLaunchUrl(uri)) {

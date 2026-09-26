@@ -252,6 +252,13 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                         icon: Icons.location_on_outlined,
                         label: 'Address',
                         value: device.address,
+                        onTap: device.hasLocation
+                            ? () => Common.openInGoogleMaps(
+                                  device.latitude!,
+                                  device.longitude!,
+                                  address: device.address,
+                                )
+                            : null,
                       ),
                       if (device.hasLocation)
                         _InfoTile(
@@ -262,7 +269,6 @@ class _DeviceMapScreenState extends State<DeviceMapScreen> {
                           onTap: () => Common.openInGoogleMaps(
                             device.latitude!,
                             device.longitude!,
-                            address: device.address,
                           ),
                         ),
                       const SizedBox(height: 8),

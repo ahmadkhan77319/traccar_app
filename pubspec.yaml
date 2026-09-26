@@ -1,7 +1,7 @@
 name: traccar_app
 description: "CarTag vehicle tracking app"
 publish_to: 'none'
-version: 1.0.2+2
+version: 1.0.3+3
 
 environment:
   sdk: ^3.7.2
